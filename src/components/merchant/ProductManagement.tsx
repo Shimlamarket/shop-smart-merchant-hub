@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Search, Filter, Edit, Trash2, Package, Star } from "lucide-react";
+import { Plus, Search, Edit, Trash2, Package, Upload, X } from "lucide-react";
 
 interface Product {
   id: string;
@@ -42,11 +42,13 @@ const ProductManagement = ({ merchantId }: ProductManagementProps) => {
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [customCategories, setCustomCategories] = useState<string[]>([]);
   const [sortBy, setSortBy] = useState<string>('name');
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
 
-  const categories = ['all', 'biscuits', 'cold_drinks', 'ice_cream', 'snacks', 'beverages'];
+  const defaultCategories = ['biscuits', 'cold_drinks', 'ice_cream', 'snacks', 'beverages'];
+  const allCategories = [...defaultCategories, ...customCategories];
 
   // Mock data initialization
   useEffect(() => {
@@ -60,7 +62,7 @@ const ProductManagement = ({ merchantId }: ProductManagementProps) => {
         sellingPrice: 35,
         quantity: 50,
         description: 'Refreshing cola drink',
-        image: '/placeholder.svg',
+        image: 'https://images.unsplash.com/photo-1618160702438-9b02ab6515c9?w=300&h=300&fit=crop',
         variations: ['500ml', '1L', '2L'],
         offers: [{ id: '1', type: 'percentage', value: 12.5, description: '12.5% off on MRP' }]
       },
@@ -73,7 +75,7 @@ const ProductManagement = ({ merchantId }: ProductManagementProps) => {
         sellingPrice: 23,
         quantity: 100,
         description: 'Classic glucose biscuits',
-        image: '/placeholder.svg',
+        image: 'https://images.unsplash.com/photo-1582562124811-c09040d0a901?w=300&h=300&fit=crop',
         variations: ['100g', '200g', '500g'],
         offers: [{ id: '2', type: 'bogo', value: 1, description: 'Buy 1 Get 1 Free' }]
       }
@@ -97,13 +99,13 @@ const ProductManagement = ({ merchantId }: ProductManagementProps) => {
       filtered = filtered.filter(product => product.category === selectedCategory);
     }
 
-    // Sort products
+    // Fixed sorting logic
     filtered.sort((a, b) => {
       switch (sortBy) {
         case 'price-low':
-          return a.sellingPrice - b.sellingPrice;
+          return a.sellingPrice - b.sellingPrice; // Fixed: low to high
         case 'price-high':
-          return b.sellingPrice - a.sellingPrice;
+          return b.sellingPrice - a.sellingPrice; // Fixed: high to low
         case 'quantity':
           return b.quantity - a.quantity;
         default:
@@ -124,10 +126,15 @@ const ProductManagement = ({ merchantId }: ProductManagementProps) => {
       sellingPrice: productData.sellingPrice || 0,
       quantity: productData.quantity || 0,
       description: productData.description || '',
-      image: '/placeholder.svg',
+      image: productData.image || 'https://images.unsplash.com/photo-1535268647677-300dbf3d78d1?w=300&h=300&fit=crop',
       variations: productData.variations || [],
       offers: []
     };
+
+    // Add custom category if it's new
+    if (productData.category && !allCategories.includes(productData.category)) {
+      setCustomCategories(prev => [...prev, productData.category!]);
+    }
 
     setProducts(prev => [...prev, newProduct]);
     setIsCreateDialogOpen(false);
@@ -137,24 +144,30 @@ const ProductManagement = ({ merchantId }: ProductManagementProps) => {
     });
   };
 
+  const handleUpdateProduct = (productData: Partial<Product>) => {
+    if (!editingProduct) return;
+    
+    const updatedProduct = { ...editingProduct, ...productData };
+    
+    // Add custom category if it's new
+    if (productData.category && !allCategories.includes(productData.category)) {
+      setCustomCategories(prev => [...prev, productData.category!]);
+    }
+
+    setProducts(prev => prev.map(p => p.id === editingProduct.id ? updatedProduct : p));
+    setEditingProduct(null);
+    toast({
+      title: "Product Updated",
+      description: `${updatedProduct.name} has been updated successfully.`,
+    });
+  };
+
   const handleDeleteProduct = (productId: string) => {
     setProducts(prev => prev.filter(p => p.id !== productId));
     toast({
       title: "Product Deleted",
       description: "Product has been removed from your inventory.",
       variant: "destructive"
-    });
-  };
-
-  const handleApplyOffer = (productId: string, offer: Offer) => {
-    setProducts(prev => prev.map(product => 
-      product.id === productId 
-        ? { ...product, offers: [...product.offers, offer] }
-        : product
-    ));
-    toast({
-      title: "Offer Applied",
-      description: "Special offer has been added to the product.",
     });
   };
 
@@ -173,7 +186,11 @@ const ProductManagement = ({ merchantId }: ProductManagementProps) => {
               Add Product
             </Button>
           </DialogTrigger>
-          <ProductDialog onSubmit={handleCreateProduct} />
+          <ProductDialog 
+            onSubmit={handleCreateProduct} 
+            categories={allCategories}
+            onAddCategory={(category) => setCustomCategories(prev => [...prev, category])}
+          />
         </Dialog>
       </div>
 
@@ -197,7 +214,8 @@ const ProductManagement = ({ merchantId }: ProductManagementProps) => {
                 <SelectValue placeholder="Category" />
               </SelectTrigger>
               <SelectContent>
-                {categories.map(category => (
+                <SelectItem value="all">ALL CATEGORIES</SelectItem>
+                {allCategories.map(category => (
                   <SelectItem key={category} value={category}>
                     {category.replace('_', ' ').toUpperCase()}
                   </SelectItem>
@@ -226,11 +244,22 @@ const ProductManagement = ({ merchantId }: ProductManagementProps) => {
             key={product.id}
             product={product}
             onDelete={handleDeleteProduct}
-            onApplyOffer={handleApplyOffer}
-            onEdit={setEditingProduct}
+            onEdit={() => setEditingProduct(product)}
           />
         ))}
       </div>
+
+      {/* Edit Dialog */}
+      {editingProduct && (
+        <Dialog open={!!editingProduct} onOpenChange={() => setEditingProduct(null)}>
+          <ProductDialog 
+            onSubmit={handleUpdateProduct} 
+            product={editingProduct}
+            categories={allCategories}
+            onAddCategory={(category) => setCustomCategories(prev => [...prev, category])}
+          />
+        </Dialog>
+      )}
 
       {filteredProducts.length === 0 && (
         <Card>
@@ -254,11 +283,10 @@ const ProductManagement = ({ merchantId }: ProductManagementProps) => {
   );
 };
 
-const ProductCard = ({ product, onDelete, onApplyOffer, onEdit }: {
+const ProductCard = ({ product, onDelete, onEdit }: {
   product: Product;
   onDelete: (id: string) => void;
-  onApplyOffer: (id: string, offer: Offer) => void;
-  onEdit: (product: Product) => void;
+  onEdit: () => void;
 }) => {
   const discountPercentage = Math.round(((product.mrp - product.sellingPrice) / product.mrp) * 100);
 
@@ -276,6 +304,15 @@ const ProductCard = ({ product, onDelete, onApplyOffer, onEdit }: {
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
+        {/* Product Image */}
+        <div className="w-full h-32 rounded-lg overflow-hidden bg-gray-100">
+          <img 
+            src={product.image} 
+            alt={product.name}
+            className="w-full h-full object-cover"
+          />
+        </div>
+
         <div className="flex justify-between items-center">
           <div>
             <div className="flex items-center gap-2">
@@ -303,7 +340,7 @@ const ProductCard = ({ product, onDelete, onApplyOffer, onEdit }: {
         )}
 
         <div className="flex gap-2">
-          <Button size="sm" variant="outline" onClick={() => onEdit(product)}>
+          <Button size="sm" variant="outline" onClick={onEdit}>
             <Edit className="h-3 w-3 mr-1" />
             Edit
           </Button>
@@ -317,9 +354,11 @@ const ProductCard = ({ product, onDelete, onApplyOffer, onEdit }: {
   );
 };
 
-const ProductDialog = ({ onSubmit, product }: {
+const ProductDialog = ({ onSubmit, product, categories, onAddCategory }: {
   onSubmit: (data: Partial<Product>) => void;
   product?: Product;
+  categories: string[];
+  onAddCategory: (category: string) => void;
 }) => {
   const [formData, setFormData] = useState({
     name: product?.name || '',
@@ -329,18 +368,40 @@ const ProductDialog = ({ onSubmit, product }: {
     sellingPrice: product?.sellingPrice || 0,
     quantity: product?.quantity || 0,
     description: product?.description || '',
-    variations: product?.variations?.join(', ') || ''
+    variations: product?.variations?.join(', ') || '',
+    image: product?.image || ''
   });
+  const [newCategory, setNewCategory] = useState('');
+  const [showNewCategory, setShowNewCategory] = useState(false);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setImageFile(file);
+      // Create preview URL
+      const previewUrl = URL.createObjectURL(file);
+      setFormData(prev => ({ ...prev, image: previewUrl }));
+    }
+  };
 
   const handleSubmit = () => {
+    let finalCategory = formData.category;
+    
+    if (showNewCategory && newCategory.trim()) {
+      finalCategory = newCategory.trim().toLowerCase().replace(/\s+/g, '_');
+      onAddCategory(finalCategory);
+    }
+
     onSubmit({
       ...formData,
+      category: finalCategory,
       variations: formData.variations.split(',').map(v => v.trim()).filter(Boolean)
     });
   };
 
   return (
-    <DialogContent className="max-w-2xl">
+    <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
       <DialogHeader>
         <DialogTitle>{product ? 'Edit Product' : 'Create New Product'}</DialogTitle>
         <DialogDescription>
@@ -366,21 +427,46 @@ const ProductDialog = ({ onSubmit, product }: {
             placeholder="Enter brand name"
           />
         </div>
+        
+        {/* Category Selection with Custom Option */}
         <div className="space-y-2">
           <Label htmlFor="category">Category</Label>
-          <Select value={formData.category} onValueChange={(value) => setFormData(prev => ({ ...prev, category: value }))}>
-            <SelectTrigger>
-              <SelectValue placeholder="Select category" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="biscuits">Biscuits</SelectItem>
-              <SelectItem value="cold_drinks">Cold Drinks</SelectItem>
-              <SelectItem value="ice_cream">Ice Cream</SelectItem>
-              <SelectItem value="snacks">Snacks</SelectItem>
-              <SelectItem value="beverages">Beverages</SelectItem>
-            </SelectContent>
-          </Select>
+          {!showNewCategory ? (
+            <div className="space-y-2">
+              <Select value={formData.category} onValueChange={(value) => {
+                if (value === 'add_new') {
+                  setShowNewCategory(true);
+                } else {
+                  setFormData(prev => ({ ...prev, category: value }));
+                }
+              }}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select category" />
+                </SelectTrigger>
+                <SelectContent>
+                  {categories.map(category => (
+                    <SelectItem key={category} value={category}>
+                      {category.replace('_', ' ').toUpperCase()}
+                    </SelectItem>
+                  ))}
+                  <SelectItem value="add_new">+ Add New Category</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          ) : (
+            <div className="flex gap-2">
+              <Input
+                value={newCategory}
+                onChange={(e) => setNewCategory(e.target.value)}
+                placeholder="Enter new category"
+              />
+              <Button size="sm" onClick={() => setShowNewCategory(false)}>
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          )}
         </div>
+
         <div className="space-y-2">
           <Label htmlFor="quantity">Quantity</Label>
           <Input
@@ -411,6 +497,32 @@ const ProductDialog = ({ onSubmit, product }: {
             placeholder="Enter selling price"
           />
         </div>
+
+        {/* Image Upload */}
+        <div className="col-span-2 space-y-2">
+          <Label htmlFor="image">Product Image</Label>
+          <div className="flex gap-4">
+            <div className="flex-1">
+              <Input
+                id="image"
+                type="file"
+                accept="image/*"
+                onChange={handleImageUpload}
+                className="cursor-pointer"
+              />
+            </div>
+            {formData.image && (
+              <div className="w-16 h-16 rounded-lg overflow-hidden bg-gray-100">
+                <img 
+                  src={formData.image} 
+                  alt="Preview"
+                  className="w-full h-full object-cover"
+                />
+              </div>
+            )}
+          </div>
+        </div>
+
         <div className="col-span-2 space-y-2">
           <Label htmlFor="variations">Variations (comma-separated)</Label>
           <Input

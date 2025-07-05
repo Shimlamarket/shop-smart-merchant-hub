@@ -1,18 +1,20 @@
 
 import { useState } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { AuthProvider, useAuth } from '@/components/auth/AuthProvider';
+import Header from '@/components/layout/Header';
 import ProductManagement from "@/components/merchant/ProductManagement";
 import OrderManagement from "@/components/merchant/OrderManagement";
 import MerchantSettings from "@/components/merchant/MerchantSettings";
-import { useToast } from "@/hooks/use-toast";
+import MerchantProfile from "@/components/merchant/MerchantProfile";
 import { Package, ShoppingCart, Settings, TrendingUp } from "lucide-react";
 
-const Index = () => {
-  const { toast } = useToast();
-  const [merchantId] = useState("merchant-123"); // In real app, this would come from auth
+const DashboardContent = () => {
+  const { user, logout } = useAuth();
+  const [merchantId] = useState("merchant-123");
+  const [isAcceptingOrders, setIsAcceptingOrders] = useState(true);
+  const [showProfile, setShowProfile] = useState(false);
 
   const stats = [
     { title: "Total Products", value: "142", icon: Package, color: "text-blue-600" },
@@ -23,13 +25,14 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
+      <Header
+        merchantName={user?.name || 'Merchant'}
+        isAcceptingOrders={isAcceptingOrders}
+        onToggleOrderStatus={setIsAcceptingOrders}
+        onProfileClick={() => setShowProfile(true)}
+      />
+      
       <div className="container mx-auto p-6">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Merchant Dashboard</h1>
-          <p className="text-gray-600">Manage your products, orders, and business settings</p>
-        </div>
-
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           {stats.map((stat, index) => (
@@ -77,7 +80,22 @@ const Index = () => {
           </TabsContent>
         </Tabs>
       </div>
+
+      {/* Profile Modal */}
+      <MerchantProfile
+        isOpen={showProfile}
+        onClose={() => setShowProfile(false)}
+        merchantId={merchantId}
+      />
     </div>
+  );
+};
+
+const Index = () => {
+  return (
+    <AuthProvider>
+      <DashboardContent />
+    </AuthProvider>
   );
 };
 
