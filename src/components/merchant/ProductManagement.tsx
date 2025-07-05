@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,7 +8,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Search, Edit, Trash2, Package, Upload, X } from "lucide-react";
+import { Plus, Search, Edit, Trash2, Package, X, Eye } from "lucide-react";
+import { useNavigate } from 'react-router-dom';
+import OfferDialog from './OfferDialog';
 
 interface Product {
   id: string;
@@ -20,16 +21,17 @@ interface Product {
   sellingPrice: number;
   quantity: number;
   description: string;
-  image: string;
+  images: string[];
   variations: string[];
   offers: Offer[];
 }
 
 interface Offer {
   id: string;
-  type: 'percentage' | 'bogo';
+  type: 'percentage' | 'bogo' | 'fixed' | 'custom';
   value: number;
   description: string;
+  customType?: string;
 }
 
 interface ProductManagementProps {
@@ -38,6 +40,7 @@ interface ProductManagementProps {
 
 const ProductManagement = ({ merchantId }: ProductManagementProps) => {
   const { toast } = useToast();
+  const navigate = useNavigate();
   const [products, setProducts] = useState<Product[]>([]);
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -62,7 +65,7 @@ const ProductManagement = ({ merchantId }: ProductManagementProps) => {
         sellingPrice: 35,
         quantity: 50,
         description: 'Refreshing cola drink',
-        image: 'https://images.unsplash.com/photo-1618160702438-9b02ab6515c9?w=300&h=300&fit=crop',
+        images: ['https://images.unsplash.com/photo-1618160702438-9b02ab6515c9?w=300&h=300&fit=crop'],
         variations: ['500ml', '1L', '2L'],
         offers: [{ id: '1', type: 'percentage', value: 12.5, description: '12.5% off on MRP' }]
       },
@@ -75,7 +78,7 @@ const ProductManagement = ({ merchantId }: ProductManagementProps) => {
         sellingPrice: 23,
         quantity: 100,
         description: 'Classic glucose biscuits',
-        image: 'https://images.unsplash.com/photo-1582562124811-c09040d0a901?w=300&h=300&fit=crop',
+        images: ['https://images.unsplash.com/photo-1582562124811-c09040d0a901?w=300&h=300&fit=crop'],
         variations: ['100g', '200g', '500g'],
         offers: [{ id: '2', type: 'bogo', value: 1, description: 'Buy 1 Get 1 Free' }]
       }
@@ -103,9 +106,9 @@ const ProductManagement = ({ merchantId }: ProductManagementProps) => {
     filtered.sort((a, b) => {
       switch (sortBy) {
         case 'price-low':
-          return a.sellingPrice - b.sellingPrice; // Fixed: low to high
+          return a.sellingPrice - b.sellingPrice;
         case 'price-high':
-          return b.sellingPrice - a.sellingPrice; // Fixed: high to low
+          return b.sellingPrice - a.sellingPrice;
         case 'quantity':
           return b.quantity - a.quantity;
         default:
@@ -126,12 +129,11 @@ const ProductManagement = ({ merchantId }: ProductManagementProps) => {
       sellingPrice: productData.sellingPrice || 0,
       quantity: productData.quantity || 0,
       description: productData.description || '',
-      image: productData.image || 'https://images.unsplash.com/photo-1535268647677-300dbf3d78d1?w=300&h=300&fit=crop',
+      images: productData.images || ['https://images.unsplash.com/photo-1535268647677-300dbf3d78d1?w=300&h=300&fit=crop'],
       variations: productData.variations || [],
-      offers: []
+      offers: productData.offers || []
     };
 
-    // Add custom category if it's new
     if (productData.category && !allCategories.includes(productData.category)) {
       setCustomCategories(prev => [...prev, productData.category!]);
     }
@@ -149,7 +151,6 @@ const ProductManagement = ({ merchantId }: ProductManagementProps) => {
     
     const updatedProduct = { ...editingProduct, ...productData };
     
-    // Add custom category if it's new
     if (productData.category && !allCategories.includes(productData.category)) {
       setCustomCategories(prev => [...prev, productData.category!]);
     }
@@ -172,16 +173,16 @@ const ProductManagement = ({ merchantId }: ProductManagementProps) => {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 lg:space-y-6">
       {/* Header with Actions */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">Product Management</h2>
-          <p className="text-gray-600">Manage your inventory and product offerings</p>
+          <h2 className="text-xl lg:text-2xl font-bold text-gray-900">Product Management</h2>
+          <p className="text-sm lg:text-base text-gray-600">Manage your inventory and product offerings</p>
         </div>
         <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
           <DialogTrigger asChild>
-            <Button className="flex items-center gap-2">
+            <Button className="flex items-center gap-2 w-full sm:w-auto">
               <Plus className="h-4 w-4" />
               Add Product
             </Button>
@@ -196,55 +197,56 @@ const ProductManagement = ({ merchantId }: ProductManagementProps) => {
 
       {/* Filters and Search */}
       <Card>
-        <CardContent className="p-6">
-          <div className="flex flex-col md:flex-row gap-4">
-            <div className="flex-1">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                <Input
-                  placeholder="Search products or brands..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
+        <CardContent className="p-4 lg:p-6">
+          <div className="flex flex-col gap-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+              <Input
+                placeholder="Search products or brands..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10"
+              />
             </div>
-            <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-              <SelectTrigger className="w-full md:w-48">
-                <SelectValue placeholder="Category" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">ALL CATEGORIES</SelectItem>
-                {allCategories.map(category => (
-                  <SelectItem key={category} value={category}>
-                    {category.replace('_', ' ').toUpperCase()}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={sortBy} onValueChange={setSortBy}>
-              <SelectTrigger className="w-full md:w-48">
-                <SelectValue placeholder="Sort by" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="name">Name A-Z</SelectItem>
-                <SelectItem value="price-low">Price Low to High</SelectItem>
-                <SelectItem value="price-high">Price High to Low</SelectItem>
-                <SelectItem value="quantity">Stock Quantity</SelectItem>
-              </SelectContent>
-            </Select>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Category" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">ALL CATEGORIES</SelectItem>
+                  {allCategories.map(category => (
+                    <SelectItem key={category} value={category}>
+                      {category.replace('_', ' ').toUpperCase()}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={sortBy} onValueChange={setSortBy}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Sort by" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="name">Name A-Z</SelectItem>
+                  <SelectItem value="price-low">Price Low to High</SelectItem>
+                  <SelectItem value="price-high">Price High to Low</SelectItem>
+                  <SelectItem value="quantity">Stock Quantity</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
         </CardContent>
       </Card>
 
       {/* Products Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 lg:gap-6">
         {filteredProducts.map(product => (
           <ProductCard
             key={product.id}
             product={product}
             onDelete={handleDeleteProduct}
             onEdit={() => setEditingProduct(product)}
+            onView={() => navigate(`/product/${product.id}`)}
           />
         ))}
       </div>
@@ -263,7 +265,7 @@ const ProductManagement = ({ merchantId }: ProductManagementProps) => {
 
       {filteredProducts.length === 0 && (
         <Card>
-          <CardContent className="p-12 text-center">
+          <CardContent className="p-8 lg:p-12 text-center">
             <Package className="h-12 w-12 text-gray-400 mx-auto mb-4" />
             <h3 className="text-lg font-semibold text-gray-900 mb-2">No products found</h3>
             <p className="text-gray-600 mb-4">
@@ -283,10 +285,11 @@ const ProductManagement = ({ merchantId }: ProductManagementProps) => {
   );
 };
 
-const ProductCard = ({ product, onDelete, onEdit }: {
+const ProductCard = ({ product, onDelete, onEdit, onView }: {
   product: Product;
   onDelete: (id: string) => void;
   onEdit: () => void;
+  onView: () => void;
 }) => {
   const discountPercentage = Math.round(((product.mrp - product.sellingPrice) / product.mrp) * 100);
 
@@ -294,27 +297,27 @@ const ProductCard = ({ product, onDelete, onEdit }: {
     <Card className="hover:shadow-lg transition-shadow">
       <CardHeader className="pb-3">
         <div className="flex justify-between items-start">
-          <div>
-            <CardTitle className="text-lg">{product.name}</CardTitle>
-            <CardDescription>{product.brand}</CardDescription>
+          <div className="min-w-0 flex-1">
+            <CardTitle className="text-base lg:text-lg truncate">{product.name}</CardTitle>
+            <CardDescription className="truncate">{product.brand}</CardDescription>
           </div>
-          <Badge variant={product.quantity > 10 ? "default" : "destructive"}>
-            {product.quantity} in stock
+          <Badge variant={product.quantity > 10 ? "default" : "destructive"} className="ml-2 shrink-0">
+            {product.quantity}
           </Badge>
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
         {/* Product Image */}
-        <div className="w-full h-32 rounded-lg overflow-hidden bg-gray-100">
+        <div className="w-full h-32 lg:h-40 rounded-lg overflow-hidden bg-gray-100">
           <img 
-            src={product.image} 
+            src={product.images[0]} 
             alt={product.name}
             className="w-full h-full object-cover"
           />
         </div>
 
         <div className="flex justify-between items-center">
-          <div>
+          <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
               <span className="text-lg font-bold text-green-600">₹{product.sellingPrice}</span>
               {discountPercentage > 0 && (
@@ -331,22 +334,30 @@ const ProductCard = ({ product, onDelete, onEdit }: {
 
         {product.offers.length > 0 && (
           <div className="space-y-1">
-            {product.offers.map(offer => (
-              <Badge key={offer.id} variant="outline" className="text-xs">
+            {product.offers.slice(0, 2).map(offer => (
+              <Badge key={offer.id} variant="outline" className="text-xs mr-1">
                 {offer.description}
               </Badge>
             ))}
+            {product.offers.length > 2 && (
+              <Badge variant="outline" className="text-xs">
+                +{product.offers.length - 2} more
+              </Badge>
+            )}
           </div>
         )}
 
         <div className="flex gap-2">
+          <Button size="sm" variant="outline" onClick={onView} className="flex-1">
+            <Eye className="h-3 w-3 mr-1" />
+            View
+          </Button>
           <Button size="sm" variant="outline" onClick={onEdit}>
             <Edit className="h-3 w-3 mr-1" />
             Edit
           </Button>
           <Button size="sm" variant="destructive" onClick={() => onDelete(product.id)}>
-            <Trash2 className="h-3 w-3 mr-1" />
-            Delete
+            <Trash2 className="h-3 w-3" />
           </Button>
         </div>
       </CardContent>
@@ -369,20 +380,53 @@ const ProductDialog = ({ onSubmit, product, categories, onAddCategory }: {
     quantity: product?.quantity || 0,
     description: product?.description || '',
     variations: product?.variations?.join(', ') || '',
-    image: product?.image || ''
+    images: product?.images || []
   });
   const [newCategory, setNewCategory] = useState('');
   const [showNewCategory, setShowNewCategory] = useState(false);
-  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [offers, setOffers] = useState<Offer[]>(product?.offers || []);
+  const [isOfferDialogOpen, setIsOfferDialogOpen] = useState(false);
+  const [editingOffer, setEditingOffer] = useState<Offer | null>(null);
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setImageFile(file);
-      // Create preview URL
+    const files = Array.from(e.target.files || []);
+    files.forEach(file => {
       const previewUrl = URL.createObjectURL(file);
-      setFormData(prev => ({ ...prev, image: previewUrl }));
-    }
+      setFormData(prev => ({ 
+        ...prev, 
+        images: [...prev.images, previewUrl] 
+      }));
+    });
+  };
+
+  const removeImage = (index: number) => {
+    setFormData(prev => ({
+      ...prev,
+      images: prev.images.filter((_, i) => i !== index)
+    }));
+  };
+
+  const handleAddOffer = (offerData: Partial<Offer>) => {
+    const newOffer: Offer = {
+      id: Date.now().toString(),
+      type: offerData.type || 'percentage',
+      value: offerData.value || 0,
+      description: offerData.description || '',
+      customType: offerData.customType
+    };
+    setOffers(prev => [...prev, newOffer]);
+    setIsOfferDialogOpen(false);
+  };
+
+  const handleUpdateOffer = (offerData: Partial<Offer>) => {
+    if (!editingOffer) return;
+    const updatedOffer = { ...editingOffer, ...offerData };
+    setOffers(prev => prev.map(offer => offer.id === editingOffer.id ? updatedOffer : offer));
+    setEditingOffer(null);
+  };
+
+  const handleDeleteOffer = (offerId: string) => {
+    setOffers(prev => prev.filter(offer => offer.id !== offerId));
   };
 
   const handleSubmit = () => {
@@ -396,43 +440,47 @@ const ProductDialog = ({ onSubmit, product, categories, onAddCategory }: {
     onSubmit({
       ...formData,
       category: finalCategory,
-      variations: formData.variations.split(',').map(v => v.trim()).filter(Boolean)
+      variations: formData.variations.split(',').map(v => v.trim()).filter(Boolean),
+      offers
     });
   };
 
   return (
-    <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+    <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
       <DialogHeader>
         <DialogTitle>{product ? 'Edit Product' : 'Create New Product'}</DialogTitle>
         <DialogDescription>
           {product ? 'Update product details' : 'Add a new product to your inventory'}
         </DialogDescription>
       </DialogHeader>
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <Label htmlFor="name">Product Name</Label>
-          <Input
-            id="name"
-            value={formData.name}
-            onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-            placeholder="Enter product name"
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="brand">Brand</Label>
-          <Input
-            id="brand"
-            value={formData.brand}
-            onChange={(e) => setFormData(prev => ({ ...prev, brand: e.target.value }))}
-            placeholder="Enter brand name"
-          />
-        </div>
-        
-        {/* Category Selection with Custom Option */}
-        <div className="space-y-2">
-          <Label htmlFor="category">Category</Label>
-          {!showNewCategory ? (
-            <div className="space-y-2">
+      
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Basic Details */}
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="name">Product Name</Label>
+            <Input
+              id="name"
+              value={formData.name}
+              onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+              placeholder="Enter product name"
+            />
+          </div>
+          
+          <div className="space-y-2">
+            <Label htmlFor="brand">Brand</Label>
+            <Input
+              id="brand"
+              value={formData.brand}
+              onChange={(e) => setFormData(prev => ({ ...prev, brand: e.target.value }))}
+              placeholder="Enter brand name"
+            />
+          </div>
+
+          {/* Category Selection */}
+          <div className="space-y-2">
+            <Label htmlFor="category">Category</Label>
+            {!showNewCategory ? (
               <Select value={formData.category} onValueChange={(value) => {
                 if (value === 'add_new') {
                   setShowNewCategory(true);
@@ -452,96 +500,166 @@ const ProductDialog = ({ onSubmit, product, categories, onAddCategory }: {
                   <SelectItem value="add_new">+ Add New Category</SelectItem>
                 </SelectContent>
               </Select>
-            </div>
-          ) : (
-            <div className="flex gap-2">
-              <Input
-                value={newCategory}
-                onChange={(e) => setNewCategory(e.target.value)}
-                placeholder="Enter new category"
-              />
-              <Button size="sm" onClick={() => setShowNewCategory(false)}>
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
-          )}
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="quantity">Quantity</Label>
-          <Input
-            id="quantity"
-            type="number"
-            value={formData.quantity}
-            onChange={(e) => setFormData(prev => ({ ...prev, quantity: parseInt(e.target.value) || 0 }))}
-            placeholder="Enter quantity"
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="mrp">MRP (₹)</Label>
-          <Input
-            id="mrp"
-            type="number"
-            value={formData.mrp}
-            onChange={(e) => setFormData(prev => ({ ...prev, mrp: parseFloat(e.target.value) || 0 }))}
-            placeholder="Enter MRP"
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="sellingPrice">Selling Price (₹)</Label>
-          <Input
-            id="sellingPrice"
-            type="number"
-            value={formData.sellingPrice}
-            onChange={(e) => setFormData(prev => ({ ...prev, sellingPrice: parseFloat(e.target.value) || 0 }))}
-            placeholder="Enter selling price"
-          />
-        </div>
-
-        {/* Image Upload */}
-        <div className="col-span-2 space-y-2">
-          <Label htmlFor="image">Product Image</Label>
-          <div className="flex gap-4">
-            <div className="flex-1">
-              <Input
-                id="image"
-                type="file"
-                accept="image/*"
-                onChange={handleImageUpload}
-                className="cursor-pointer"
-              />
-            </div>
-            {formData.image && (
-              <div className="w-16 h-16 rounded-lg overflow-hidden bg-gray-100">
-                <img 
-                  src={formData.image} 
-                  alt="Preview"
-                  className="w-full h-full object-cover"
+            ) : (
+              <div className="flex gap-2">
+                <Input
+                  value={newCategory}
+                  onChange={(e) => setNewCategory(e.target.value)}
+                  placeholder="Enter new category"
                 />
+                <Button size="sm" onClick={() => setShowNewCategory(false)}>
+                  <X className="h-4 w-4" />
+                </Button>
               </div>
             )}
           </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="mrp">MRP (₹)</Label>
+              <Input
+                id="mrp"
+                type="number"
+                value={formData.mrp}
+                onChange={(e) => setFormData(prev => ({ ...prev, mrp: parseFloat(e.target.value) || 0 }))}
+                placeholder="Enter MRP"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="sellingPrice">Selling Price (₹)</Label>
+              <Input
+                id="sellingPrice"
+                type="number"
+                value={formData.sellingPrice}
+                onChange={(e) => setFormData(prev => ({ ...prev, sellingPrice: parseFloat(e.target.value) || 0 }))}
+                placeholder="Enter selling price"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="quantity">Quantity</Label>
+            <Input
+              id="quantity"
+              type="number"
+              value={formData.quantity}
+              onChange={(e) => setFormData(prev => ({ ...prev, quantity: parseInt(e.target.value) || 0 }))}
+              placeholder="Enter quantity"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="variations">Variations (comma-separated)</Label>
+            <Input
+              id="variations"
+              value={formData.variations}
+              onChange={(e) => setFormData(prev => ({ ...prev, variations: e.target.value }))}
+              placeholder="e.g. 500ml, 1L, 2L"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="description">Description</Label>
+            <Textarea
+              id="description"
+              value={formData.description}
+              onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+              placeholder="Enter product description"
+              rows={3}
+            />
+          </div>
         </div>
 
-        <div className="col-span-2 space-y-2">
-          <Label htmlFor="variations">Variations (comma-separated)</Label>
-          <Input
-            id="variations"
-            value={formData.variations}
-            onChange={(e) => setFormData(prev => ({ ...prev, variations: e.target.value }))}
-            placeholder="e.g. 500ml, 1L, 2L"
-          />
-        </div>
-        <div className="col-span-2 space-y-2">
-          <Label htmlFor="description">Description</Label>
-          <Textarea
-            id="description"
-            value={formData.description}
-            onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-            placeholder="Enter product description"
-          />
+        {/* Images and Offers */}
+        <div className="space-y-4">
+          {/* Multiple Image Upload */}
+          <div className="space-y-2">
+            <Label htmlFor="images">Product Images</Label>
+            <Input
+              id="images"
+              type="file"
+              accept="image/*"
+              multiple
+              onChange={handleImageUpload}
+              className="cursor-pointer"
+            />
+            {formData.images.length > 0 && (
+              <div className="grid grid-cols-3 gap-2 mt-2">
+                {formData.images.map((image, index) => (
+                  <div key={index} className="relative group">
+                    <img 
+                      src={image} 
+                      alt={`Preview ${index + 1}`}
+                      className="w-full h-20 object-cover rounded-lg"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeImage(index)}
+                      className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Offers Management */}
+          <div className="space-y-2">
+            <div className="flex justify-between items-center">
+              <Label>Product Offers</Label>
+              <Dialog open={isOfferDialogOpen} onOpenChange={setIsOfferDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button size="sm" variant="outline">
+                    <Plus className="h-4 w-4 mr-1" />
+                    Add Offer
+                  </Button>
+                </DialogTrigger>
+                <OfferDialog onSubmit={handleAddOffer} />
+              </Dialog>
+            </div>
+            
+            {offers.length > 0 ? (
+              <div className="space-y-2 max-h-40 overflow-y-auto">
+                {offers.map(offer => (
+                  <div key={offer.id} className="flex justify-between items-center p-2 bg-green-50 rounded border border-green-200">
+                    <div className="min-w-0 flex-1">
+                      <Badge className="mb-1 text-xs">
+                        {offer.customType || offer.type.toUpperCase()}
+                      </Badge>
+                      <p className="text-xs text-gray-700 truncate">{offer.description}</p>
+                    </div>
+                    <div className="flex gap-1 ml-2">
+                      <Button size="sm" variant="outline" onClick={() => setEditingOffer(offer)} className="h-6 px-2">
+                        <Edit className="h-3 w-3" />
+                      </Button>
+                      <Button size="sm" variant="destructive" onClick={() => handleDeleteOffer(offer.id)} className="h-6 px-2">
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-gray-500 text-center py-4 border border-dashed border-gray-300 rounded">
+                No offers added yet
+              </p>
+            )}
+          </div>
         </div>
       </div>
+
+      {/* Edit Offer Dialog */}
+      {editingOffer && (
+        <Dialog open={!!editingOffer} onOpenChange={() => setEditingOffer(null)}>
+          <OfferDialog 
+            onSubmit={handleUpdateOffer} 
+            offer={editingOffer}
+          />
+        </Dialog>
+      )}
+
       <DialogFooter>
         <Button onClick={handleSubmit}>
           {product ? 'Update Product' : 'Create Product'}
