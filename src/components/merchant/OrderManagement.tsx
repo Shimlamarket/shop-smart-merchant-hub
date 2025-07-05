@@ -1,0 +1,457 @@
+
+import { useState, useEffect } from 'react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useToast } from "@/hooks/use-toast";
+import { Clock, CheckCircle, XCircle, Truck, Phone, MapPin, Package } from "lucide-react";
+
+interface Order {
+  id: string;
+  customerName: string;
+  customerPhone: string;
+  customerAddress: string;
+  items: OrderItem[];
+  totalAmount: number;
+  status: 'pending' | 'accepted' | 'declined' | 'in-delivery' | 'delivered';
+  orderTime: string;
+  estimatedDelivery?: string;
+}
+
+interface OrderItem {
+  productId: string;
+  productName: string;
+  quantity: number;
+  price: number;
+  customization?: string;
+}
+
+interface OrderManagementProps {
+  merchantId: string;
+}
+
+const OrderManagement = ({ merchantId }: OrderManagementProps) => {
+  const { toast } = useToast();
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [filteredOrders, setFilteredOrders] = useState<Order[]>([]);
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+
+  // Mock data initialization
+  useEffect(() => {
+    const mockOrders: Order[] = [
+      {
+        id: 'ORD-001',
+        customerName: 'Rajesh Kumar',
+        customerPhone: '+91 9876543210',
+        customerAddress: '123 MG Road, Sector 14, Gurgaon, Haryana - 122001',
+        items: [
+          { productId: '1', productName: 'Coca Cola 500ml', quantity: 2, price: 35, customization: 'Extra ice' },
+          { productId: '2', productName: 'Parle-G Biscuits', quantity: 1, price: 23 }
+        ],
+        totalAmount: 93,
+        status: 'pending',
+        orderTime: '2024-01-15T14:30:00Z'
+      },
+      {
+        id: 'ORD-002',
+        customerName: 'Priya Sharma',
+        customerPhone: '+91 8765432109',
+        customerAddress: '456 Park Street, Block B, Noida, UP - 201301',
+        items: [
+          { productId: '3', productName: 'Vanilla Ice Cream', quantity: 1, price: 120 }
+        ],
+        totalAmount: 120,
+        status: 'accepted',
+        orderTime: '2024-01-15T13:15:00Z',
+        estimatedDelivery: '2024-01-15T15:30:00Z'
+      },
+      {
+        id: 'ORD-003',
+        customerName: 'Amit Patel',
+        customerPhone: '+91 7654321098',
+        customerAddress: '789 Gandhi Nagar, Phase 2, Ahmedabad, Gujarat - 380001',
+        items: [
+          { productId: '1', productName: 'Coca Cola 500ml', quantity: 3, price: 35 },
+          { productId: '4', productName: 'Lay\'s Chips', quantity: 2, price: 20 }
+        ],
+        totalAmount: 145,
+        status: 'in-delivery',
+        orderTime: '2024-01-15T12:00:00Z',
+        estimatedDelivery: '2024-01-15T14:00:00Z'
+      }
+    ];
+    setOrders(mockOrders);
+    setFilteredOrders(mockOrders);
+  }, []);
+
+  // Filter orders by status
+  useEffect(() => {
+    if (statusFilter === 'all') {
+      setFilteredOrders(orders);
+    } else {
+      setFilteredOrders(orders.filter(order => order.status === statusFilter));
+    }
+  }, [orders, statusFilter]);
+
+  const updateOrderStatus = (orderId: string, newStatus: Order['status']) => {
+    setOrders(prev => prev.map(order => 
+      order.id === orderId 
+        ? { 
+            ...order, 
+            status: newStatus,
+            estimatedDelivery: newStatus === 'accepted' ? 
+              new Date(Date.now() + 90 * 60 * 1000).toISOString() : 
+              order.estimatedDelivery
+          }
+        : order
+    ));
+
+    const statusMessages = {
+      accepted: 'Order accepted successfully!',
+      declined: 'Order declined.',
+      'in-delivery': 'Order marked as in delivery.',
+      delivered: 'Order marked as delivered.'
+    };
+
+    toast({
+      title: "Order Status Updated",
+      description: statusMessages[newStatus],
+    });
+  };
+
+  const callCustomer = (phone: string) => {
+    // In a real app, this would integrate with a calling service
+    toast({
+      title: "Calling Customer",
+      description: `Initiating call to ${phone}`,
+    });
+  };
+
+  const getStatusIcon = (status: Order['status']) => {
+    switch (status) {
+      case 'pending': return <Clock className="h-4 w-4" />;
+      case 'accepted': return <CheckCircle className="h-4 w-4" />;
+      case 'declined': return <XCircle className="h-4 w-4" />;
+      case 'in-delivery': return <Truck className="h-4 w-4" />;
+      case 'delivered': return <Package className="h-4 w-4" />;
+    }
+  };
+
+  const getStatusColor = (status: Order['status']) => {
+    switch (status) {
+      case 'pending': return 'bg-yellow-100 text-yellow-800';
+      case 'accepted': return 'bg-blue-100 text-blue-800';
+      case 'declined': return 'bg-red-100 text-red-800';
+      case 'in-delivery': return 'bg-orange-100 text-orange-800';
+      case 'delivered': return 'bg-green-100 text-green-800';
+    }
+  };
+
+  const formatTime = (timeString: string) => {
+    return new Date(timeString).toLocaleString('en-IN', {
+      hour: '2-digit',
+      minute: '2-digit',
+      day: '2-digit',
+      month: 'short'
+    });
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900">Order Management</h2>
+          <p className="text-gray-600">Track and manage customer orders</p>
+        </div>
+        
+        {/* Status Filter */}
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="w-48">
+            <SelectValue placeholder="Filter by status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Orders</SelectItem>
+            <SelectItem value="pending">Pending</SelectItem>
+            <SelectItem value="accepted">Accepted</SelectItem>
+            <SelectItem value="declined">Declined</SelectItem>
+            <SelectItem value="in-delivery">In Delivery</SelectItem>
+            <SelectItem value="delivered">Delivered</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Orders List */}
+      <div className="space-y-4">
+        {filteredOrders.map(order => (
+          <OrderCard 
+            key={order.id}
+            order={order}
+            onUpdateStatus={updateOrderStatus}
+            onCallCustomer={callCustomer}
+            onViewDetails={() => setSelectedOrder(order)}
+          />
+        ))}
+      </div>
+
+      {filteredOrders.length === 0 && (
+        <Card>
+          <CardContent className="p-12 text-center">
+            <Package className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">No orders found</h3>
+            <p className="text-gray-600">
+              {orders.length === 0 
+                ? "You don't have any orders yet." 
+                : "No orders match the selected filter."
+              }
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Order Details Dialog */}
+      {selectedOrder && (
+        <Dialog open={!!selectedOrder} onOpenChange={() => setSelectedOrder(null)}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Order Details - {selectedOrder.id}</DialogTitle>
+              <DialogDescription>
+                Complete order information and customer details
+              </DialogDescription>
+            </DialogHeader>
+            
+            <div className="space-y-6">
+              {/* Customer Info */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <h4 className="font-semibold mb-2">Customer Information</h4>
+                  <div className="space-y-2 text-sm">
+                    <p><strong>Name:</strong> {selectedOrder.customerName}</p>
+                    <p><strong>Phone:</strong> {selectedOrder.customerPhone}</p>
+                    <div className="flex items-start gap-2">
+                      <MapPin className="h-4 w-4 mt-0.5 text-gray-500" />
+                      <span>{selectedOrder.customerAddress}</span>
+                    </div>
+                  </div>
+                </div>
+                
+                <div>
+                  <h4 className="font-semibold mb-2">Order Information</h4>
+                  <div className="space-y-2 text-sm">
+                    <p><strong>Order Time:</strong> {formatTime(selectedOrder.orderTime)}</p>
+                    <p><strong>Status:</strong> 
+                      <Badge className={`ml-2 ${getStatusColor(selectedOrder.status)}`}>
+                        {selectedOrder.status.replace('-', ' ').toUpperCase()}
+                      </Badge>
+                    </p>
+                    {selectedOrder.estimatedDelivery && (
+                      <p><strong>Estimated Delivery:</strong> {formatTime(selectedOrder.estimatedDelivery)}</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Order Items */}
+              <div>
+                <h4 className="font-semibold mb-3">Order Items</h4>
+                <div className="space-y-3">
+                  {selectedOrder.items.map((item, index) => (
+                    <div key={index} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                      <div>
+                        <p className="font-medium">{item.productName}</p>
+                        <p className="text-sm text-gray-600">Quantity: {item.quantity}</p>
+                        {item.customization && (
+                          <p className="text-sm text-blue-600">Note: {item.customization}</p>
+                        )}
+                      </div>
+                      <div className="text-right">
+                        <p className="font-semibold">₹{item.price * item.quantity}</p>
+                        <p className="text-sm text-gray-600">₹{item.price} each</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                
+                <div className="mt-4 pt-4 border-t flex justify-between items-center">
+                  <span className="text-lg font-semibold">Total Amount:</span>
+                  <span className="text-xl font-bold text-green-600">₹{selectedOrder.totalAmount}</span>
+                </div>
+              </div>
+            </div>
+
+            <DialogFooter className="flex gap-2">
+              <Button variant="outline" onClick={() => callCustomer(selectedOrder.customerPhone)}>
+                <Phone className="h-4 w-4 mr-2" />
+                Call Customer
+              </Button>
+              {selectedOrder.status === 'pending' && (
+                <>
+                  <Button 
+                    variant="destructive" 
+                    onClick={() => {
+                      updateOrderStatus(selectedOrder.id, 'declined');
+                      setSelectedOrder(null);
+                    }}
+                  >
+                    Decline Order
+                  </Button>
+                  <Button 
+                    onClick={() => {
+                      updateOrderStatus(selectedOrder.id, 'accepted');
+                      setSelectedOrder(null);
+                    }}
+                  >
+                    Accept Order
+                  </Button>
+                </>
+              )}
+              {selectedOrder.status === 'accepted' && (
+                <Button 
+                  onClick={() => {
+                    updateOrderStatus(selectedOrder.id, 'in-delivery');
+                    setSelectedOrder(null);
+                  }}
+                >
+                  Mark as In Delivery
+                </Button>
+              )}
+              {selectedOrder.status === 'in-delivery' && (
+                <Button 
+                  onClick={() => {
+                    updateOrderStatus(selectedOrder.id, 'delivered');
+                    setSelectedOrder(null);
+                  }}
+                >
+                  Mark as Delivered
+                </Button>
+              )}
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+    </div>
+  );
+};
+
+const OrderCard = ({ 
+  order, 
+  onUpdateStatus, 
+  onCallCustomer, 
+  onViewDetails 
+}: {
+  order: Order;
+  onUpdateStatus: (orderId: string, status: Order['status']) => void;
+  onCallCustomer: (phone: string) => void;
+  onViewDetails: () => void;
+}) => {
+  const getStatusIcon = (status: Order['status']) => {
+    switch (status) {
+      case 'pending': return <Clock className="h-4 w-4" />;
+      case 'accepted': return <CheckCircle className="h-4 w-4" />;
+      case 'declined': return <XCircle className="h-4 w-4" />;
+      case 'in-delivery': return <Truck className="h-4 w-4" />;
+      case 'delivered': return <Package className="h-4 w-4" />;
+    }
+  };
+
+  const getStatusColor = (status: Order['status']) => {
+    switch (status) {
+      case 'pending': return 'bg-yellow-100 text-yellow-800';
+      case 'accepted': return 'bg-blue-100 text-blue-800';
+      case 'declined': return 'bg-red-100 text-red-800';
+      case 'in-delivery': return 'bg-orange-100 text-orange-800';
+      case 'delivered': return 'bg-green-100 text-green-800';
+    }
+  };
+
+  const formatTime = (timeString: string) => {
+    return new Date(timeString).toLocaleString('en-IN', {
+      hour: '2-digit',
+      minute: '2-digit',
+      day: '2-digit',
+      month: 'short'
+    });
+  };
+
+  return (
+    <Card className="hover:shadow-lg transition-shadow">
+      <CardHeader>
+        <div className="flex justify-between items-start">
+          <div>
+            <CardTitle className="text-lg">Order {order.id}</CardTitle>
+            <CardDescription>{order.customerName} • {formatTime(order.orderTime)}</CardDescription>
+          </div>
+          <Badge className={`flex items-center gap-1 ${getStatusColor(order.status)}`}>
+            {getStatusIcon(order.status)}
+            {order.status.replace('-', ' ').toUpperCase()}
+          </Badge>
+        </div>
+      </CardHeader>
+      
+      <CardContent className="space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <h4 className="font-semibold text-sm mb-2">Items ({order.items.length})</h4>
+            <div className="space-y-1">
+              {order.items.slice(0, 2).map((item, index) => (
+                <p key={index} className="text-sm text-gray-600">
+                  {item.quantity}x {item.productName}
+                </p>
+              ))}
+              {order.items.length > 2 && (
+                <p className="text-sm text-gray-500">+{order.items.length - 2} more items</p>
+              )}
+            </div>
+          </div>
+          
+          <div className="text-right">
+            <p className="text-2xl font-bold text-green-600">₹{order.totalAmount}</p>
+            {order.estimatedDelivery && (
+              <p className="text-sm text-gray-600">
+                ETA: {formatTime(order.estimatedDelivery)}
+              </p>
+            )}
+          </div>
+        </div>
+
+        <div className="flex gap-2 pt-4 border-t">
+          <Button size="sm" variant="outline" onClick={onViewDetails}>
+            View Details
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => onCallCustomer(order.customerPhone)}>
+            <Phone className="h-3 w-3 mr-1" />
+            Call
+          </Button>
+          
+          {order.status === 'pending' && (
+            <>
+              <Button size="sm" variant="destructive" onClick={() => onUpdateStatus(order.id, 'declined')}>
+                Decline
+              </Button>
+              <Button size="sm" onClick={() => onUpdateStatus(order.id, 'accepted')}>
+                Accept
+              </Button>
+            </>
+          )}
+          
+          {order.status === 'accepted' && (
+            <Button size="sm" onClick={() => onUpdateStatus(order.id, 'in-delivery')}>
+              Start Delivery
+            </Button>
+          )}
+          
+          {order.status === 'in-delivery' && (
+            <Button size="sm" onClick={() => onUpdateStatus(order.id, 'delivered')}>
+              Mark Delivered
+            </Button>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+};
+
+export default OrderManagement;
