@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -8,7 +7,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { User, Store, Mail, Phone, MapPin, Clock, Edit, Camera } from "lucide-react";
+import { useAuth } from "@/components/auth/AuthProvider";
+import { User, Store, Mail, Phone, MapPin, Clock, Edit, Camera, LogOut } from "lucide-react";
 
 interface MerchantData {
   id: string;
@@ -35,6 +35,7 @@ interface MerchantProfileProps {
 
 const MerchantProfile = ({ isOpen, onClose, merchantId }: MerchantProfileProps) => {
   const { toast } = useToast();
+  const { logout } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
   const [merchantData, setMerchantData] = useState<MerchantData>({
     id: merchantId,
@@ -75,6 +76,11 @@ const MerchantProfile = ({ isOpen, onClose, merchantId }: MerchantProfileProps) 
     }
   };
 
+  const handleSignOut = () => {
+    logout();
+    onClose();
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
@@ -86,14 +92,25 @@ const MerchantProfile = ({ isOpen, onClose, merchantId }: MerchantProfileProps) 
                 View and manage your store information
               </DialogDescription>
             </div>
-            <Button
-              variant={isEditing ? "default" : "outline"}
-              size="sm"
-              onClick={() => isEditing ? handleSave() : setIsEditing(true)}
-            >
-              <Edit className="h-4 w-4 mr-2" />
-              {isEditing ? 'Save Changes' : 'Edit Profile'}
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleSignOut}
+                className="text-red-600 hover:text-red-700 hover:bg-red-50"
+              >
+                <LogOut className="h-4 w-4 mr-2" />
+                Sign Out
+              </Button>
+              <Button
+                variant={isEditing ? "default" : "outline"}
+                size="sm"
+                onClick={() => isEditing ? handleSave() : setIsEditing(true)}
+              >
+                <Edit className="h-4 w-4 mr-2" />
+                {isEditing ? 'Save Changes' : 'Edit Profile'}
+              </Button>
+            </div>
           </div>
         </DialogHeader>
 

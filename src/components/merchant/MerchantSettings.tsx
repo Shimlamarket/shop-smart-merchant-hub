@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,7 +8,7 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { AlertTriangle, Save, Settings, Percent, Gift, Bell, MapPin, X } from "lucide-react";
+import { AlertTriangle, Save, Settings, Percent, Gift, Bell, MapPin, X, Navigation } from "lucide-react";
 
 interface MerchantMetadata {
   storeName: string;
@@ -46,6 +45,7 @@ interface MerchantSettingsProps {
 
 const MerchantSettings = ({ merchantId }: MerchantSettingsProps) => {
   const { toast } = useToast();
+  const [isGettingLocation, setIsGettingLocation] = useState(false);
   const [metadata, setMetadata] = useState<MerchantMetadata>({
     storeName: 'My Store',
     description: 'Fresh groceries and daily essentials',
@@ -130,6 +130,61 @@ const MerchantSettings = ({ merchantId }: MerchantSettingsProps) => {
     });
   };
 
+  const getCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      toast({
+        title: "Geolocation Not Supported",
+        description: "Your browser doesn't support location services.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setIsGettingLocation(true);
+    
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+        setMetadata(prev => ({ 
+          ...prev, 
+          location: { latitude, longitude }
+        }));
+        setIsGettingLocation(false);
+        toast({
+          title: "Location Updated",
+          description: "Your current location has been automatically filled.",
+        });
+      },
+      (error) => {
+        setIsGettingLocation(false);
+        let errorMessage = "Unable to get your location.";
+        
+        switch (error.code) {
+          case error.PERMISSION_DENIED:
+            errorMessage = "Location access denied. Please enable location services.";
+            break;
+          case error.POSITION_UNAVAILABLE:
+            errorMessage = "Location information is unavailable.";
+            break;
+          case error.TIMEOUT:
+            errorMessage = "Location request timed out.";
+            break;
+        }
+        
+        toast({
+          title: "Location Error",
+          description: errorMessage,
+          variant: "destructive"
+        });
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 60000
+      }
+    );
+  };
+
   return (
     <div className="space-y-4 sm:space-y-6 px-2 sm:px-0">
       {/* Header */}
@@ -198,11 +253,24 @@ const MerchantSettings = ({ merchantId }: MerchantSettingsProps) => {
               />
             </div>
 
-            {/* NEW: Optional Geolocation Fields */}
+            {/* Enhanced Geolocation Fields */}
             <div className="space-y-3 p-3 border rounded-lg bg-gray-50">
-              <div className="flex items-center gap-2">
-                <MapPin className="h-4 w-4 text-gray-600" />
-                <Label className="text-sm font-medium">Store Location (Optional)</Label>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <MapPin className="h-4 w-4 text-gray-600" />
+                  <Label className="text-sm font-medium">Store Location (Optional)</Label>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={getCurrentLocation}
+                  disabled={isGettingLocation}
+                  className="text-xs"
+                >
+                  <Navigation className="h-3 w-3 mr-1" />
+                  {isGettingLocation ? 'Getting...' : 'Use Current Location'}
+                </Button>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-2">
@@ -245,7 +313,7 @@ const MerchantSettings = ({ merchantId }: MerchantSettingsProps) => {
                 </div>
               </div>
               <p className="text-xs text-gray-500">
-                Add your store's exact location to help customers find you and improve delivery accuracy.
+                Add your store's exact location to help customers find you and improve delivery accuracy. Click "Use Current Location" to auto-fill with your device's location.
               </p>
             </div>
 
