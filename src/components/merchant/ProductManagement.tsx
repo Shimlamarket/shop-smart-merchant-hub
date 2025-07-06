@@ -81,13 +81,32 @@ const ProductManagement = ({ merchantId }: ProductManagementProps) => {
         images: ['https://images.unsplash.com/photo-1582562124811-c09040d0a901?w=300&h=300&fit=crop'],
         variations: ['100g', '200g', '500g'],
         offers: [{ id: '2', type: 'bogo', value: 1, description: 'Buy 1 Get 1 Free' }]
+      },
+      {
+        id: '3',
+        name: 'Premium Ice Cream',
+        category: 'ice_cream',
+        brand: 'Kwality',
+        mrp: 120,
+        sellingPrice: 100,
+        quantity: 25,
+        description: 'Delicious vanilla ice cream',
+        images: ['https://images.unsplash.com/photo-1501443762994-82bd5dace89a?w=300&h=300&fit=crop'],
+        variations: ['500ml', '1L'],
+        offers: []
       }
     ];
     setProducts(mockProducts);
     setFilteredProducts(mockProducts);
   }, []);
 
-  // Filter and search logic with FIXED SORTING
+  // Get available categories (only show categories that have products)
+  const getAvailableCategories = () => {
+    const categoriesWithProducts = [...new Set(products.map(product => product.category))];
+    return categoriesWithProducts.sort();
+  };
+
+  // Filter and search logic with CORRECTED SORTING
   useEffect(() => {
     let filtered = products;
 
@@ -102,15 +121,21 @@ const ProductManagement = ({ merchantId }: ProductManagementProps) => {
       filtered = filtered.filter(product => product.category === selectedCategory);
     }
 
-    // FIXED: Correct sorting implementation
+    // CORRECTED: Fixed sorting implementation
     filtered.sort((a, b) => {
       switch (sortBy) {
         case 'price-low':
           return a.sellingPrice - b.sellingPrice; // Low to High (ascending)
         case 'price-high':
           return b.sellingPrice - a.sellingPrice; // High to Low (descending)
-        case 'quantity':
-          return b.quantity - a.quantity;
+        case 'quantity-high':
+          return b.quantity - a.quantity; // High to Low
+        case 'quantity-low':
+          return a.quantity - b.quantity; // Low to High
+        case 'name-az':
+          return a.name.localeCompare(b.name); // A to Z
+        case 'name-za':
+          return b.name.localeCompare(a.name); // Z to A
         default:
           return a.name.localeCompare(b.name);
       }
@@ -172,6 +197,8 @@ const ProductManagement = ({ merchantId }: ProductManagementProps) => {
     });
   };
 
+  const availableCategories = getAvailableCategories();
+
   return (
     <div className="space-y-4 lg:space-y-6 px-2 sm:px-0">
       {/* Header with Actions - IMPROVED MOBILE */}
@@ -218,7 +245,7 @@ const ProductManagement = ({ merchantId }: ProductManagementProps) => {
                 </SelectTrigger>
                 <SelectContent className="bg-white border shadow-lg z-50">
                   <SelectItem value="all">ALL CATEGORIES</SelectItem>
-                  {allCategories.map(category => (
+                  {availableCategories.map(category => (
                     <SelectItem key={category} value={category}>
                       {category.replace('_', ' ').toUpperCase()}
                     </SelectItem>
@@ -230,10 +257,12 @@ const ProductManagement = ({ merchantId }: ProductManagementProps) => {
                   <SelectValue placeholder="Sort by" />
                 </SelectTrigger>
                 <SelectContent className="bg-white border shadow-lg z-50">
-                  <SelectItem value="name">Name A-Z</SelectItem>
-                  <SelectItem value="price-low">Price Low to High</SelectItem>
-                  <SelectItem value="price-high">Price High to Low</SelectItem>
-                  <SelectItem value="quantity">Stock Quantity</SelectItem>
+                  <SelectItem value="name-az">Name: A to Z</SelectItem>
+                  <SelectItem value="name-za">Name: Z to A</SelectItem>
+                  <SelectItem value="price-low">Price: Low to High</SelectItem>
+                  <SelectItem value="price-high">Price: High to Low</SelectItem>
+                  <SelectItem value="quantity-high">Stock: High to Low</SelectItem>
+                  <SelectItem value="quantity-low">Stock: Low to High</SelectItem>
                 </SelectContent>
               </Select>
             </div>
