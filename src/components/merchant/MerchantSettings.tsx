@@ -22,7 +22,6 @@ interface MerchantMetadata {
   };
   deliveryRadius: number;
   minimumOrderAmount: number;
-  // NEW: Optional geolocation fields
   location?: {
     latitude: number;
     longitude: number;
@@ -55,7 +54,6 @@ const MerchantSettings = ({ merchantId }: MerchantSettingsProps) => {
     businessHours: { open: '09:00', close: '21:00' },
     deliveryRadius: 5,
     minimumOrderAmount: 50,
-    // Optional location
     location: {
       latitude: 28.6139,
       longitude: 77.2090
@@ -258,7 +256,7 @@ const MerchantSettings = ({ merchantId }: MerchantSettingsProps) => {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <MapPin className="h-4 w-4 text-gray-600" />
-                  <Label className="text-sm font-medium">Store Location (Optional)</Label>
+                  <Label className="text-sm font-medium">Store Location</Label>
                 </div>
                 <Button
                   type="button"
