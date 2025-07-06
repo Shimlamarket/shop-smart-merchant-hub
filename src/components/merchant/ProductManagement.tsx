@@ -125,19 +125,19 @@ const ProductManagement = ({ merchantId }: ProductManagementProps) => {
     filtered.sort((a, b) => {
       switch (sortBy) {
         case 'price-low':
-          return a.sellingPrice - b.sellingPrice; // Low to High (ascending)
+          return b.sellingPrice - a.sellingPrice; // Low to High (ascending)
         case 'price-high':
-          return b.sellingPrice - a.sellingPrice; // High to Low (descending)
+          return a.sellingPrice - b.sellingPrice;// High to Low (descending)
         case 'quantity-high':
-          return b.quantity - a.quantity; // High to Low
+          return a.quantity - b.quantity; // High to Low
         case 'quantity-low':
-          return a.quantity - b.quantity; // Low to High
+          return b.quantity - a.quantity; // Low to High
         case 'name-az':
-          return a.name.localeCompare(b.name); // A to Z
+          return b.name.localeCompare(a.name);// A to Z
         case 'name-za':
-          return b.name.localeCompare(a.name); // Z to A
+          return a.name.localeCompare(b.name); // Z to A
         default:
-          return a.name.localeCompare(b.name);
+          return b.name.localeCompare(a.name);
       }
     });
 
