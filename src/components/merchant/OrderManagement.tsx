@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Clock, CheckCircle, XCircle, Truck, Phone, MapPin, Package } from "lucide-react";
+import { Clock, CheckCircle, XCircle, Truck, Phone, MapPin, Package, Timer } from "lucide-react";
 
 interface Order {
   id: string;
@@ -18,6 +18,9 @@ interface Order {
   status: 'pending' | 'accepted' | 'declined' | 'in-delivery' | 'delivered';
   orderTime: string;
   estimatedDelivery?: string;
+  // NEW: Timer fields for offer acceptance
+  offerExpiry?: string;
+  timeRemaining?: number;
 }
 
 interface OrderItem {
@@ -53,7 +56,10 @@ const OrderManagement = ({ merchantId }: OrderManagementProps) => {
         ],
         totalAmount: 93,
         status: 'pending',
-        orderTime: '2024-01-15T14:30:00Z'
+        orderTime: '2024-01-15T14:30:00Z',
+        // NEW: 2-minute timer for pending orders
+        offerExpiry: new Date(Date.now() + 2 * 60 * 1000).toISOString(),
+        timeRemaining: 120
       },
       {
         id: 'ORD-002',
@@ -87,6 +93,37 @@ const OrderManagement = ({ merchantId }: OrderManagementProps) => {
     setFilteredOrders(mockOrders);
   }, []);
 
+  // NEW: Timer countdown for pending orders
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setOrders(prevOrders => 
+        prevOrders.map(order => {
+          if (order.status === 'pending' && order.offerExpiry) {
+            const now = new Date().getTime();
+            const expiry = new Date(order.offerExpiry).getTime();
+            const timeLeft = Math.max(0, Math.floor((expiry - now) / 1000));
+            
+            if (timeLeft === 0) {
+              // Auto-reject expired orders
+              toast({
+                title: "Order Expired",
+                description: `Order ${order.id} was automatically rejected due to timeout.`,
+                variant: "destructive"
+              });
+              
+              return { ...order, status: 'declined' as const, timeRemaining: 0 };
+            }
+            
+            return { ...order, timeRemaining: timeLeft };
+          }
+          return order;
+        })
+      );
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [toast]);
+
   // Filter orders by status
   useEffect(() => {
     if (statusFilter === 'all') {
@@ -104,7 +141,10 @@ const OrderManagement = ({ merchantId }: OrderManagementProps) => {
             status: newStatus,
             estimatedDelivery: newStatus === 'accepted' ? 
               new Date(Date.now() + 90 * 60 * 1000).toISOString() : 
-              order.estimatedDelivery
+              order.estimatedDelivery,
+            // Clear timer when order is accepted/declined
+            offerExpiry: undefined,
+            timeRemaining: undefined
           }
         : order
     ));
@@ -159,21 +199,28 @@ const OrderManagement = ({ merchantId }: OrderManagementProps) => {
     });
   };
 
+  // NEW: Format timer display
+  const formatTimer = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6 px-2 sm:px-0">
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900">Order Management</h2>
-          <p className="text-gray-600">Track and manage customer orders</p>
+        <div className="min-w-0 flex-1">
+          <h2 className="text-xl sm:text-2xl font-bold text-gray-900">Order Management</h2>
+          <p className="text-sm sm:text-base text-gray-600">Track and manage customer orders</p>
         </div>
         
         {/* Status Filter */}
         <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-48">
+          <SelectTrigger className="w-full sm:w-48">
             <SelectValue placeholder="Filter by status" />
           </SelectTrigger>
-          <SelectContent>
+          <SelectContent className="bg-white border shadow-lg z-50">
             <SelectItem value="all">All Orders</SelectItem>
             <SelectItem value="pending">Pending</SelectItem>
             <SelectItem value="accepted">Accepted</SelectItem>
@@ -185,7 +232,7 @@ const OrderManagement = ({ merchantId }: OrderManagementProps) => {
       </div>
 
       {/* Orders List */}
-      <div className="space-y-4">
+      <div className="space-y-3 sm:space-y-4">
         {filteredOrders.map(order => (
           <OrderCard 
             key={order.id}
@@ -193,16 +240,17 @@ const OrderManagement = ({ merchantId }: OrderManagementProps) => {
             onUpdateStatus={updateOrderStatus}
             onCallCustomer={callCustomer}
             onViewDetails={() => setSelectedOrder(order)}
+            formatTimer={formatTimer}
           />
         ))}
       </div>
 
       {filteredOrders.length === 0 && (
         <Card>
-          <CardContent className="p-12 text-center">
-            <Package className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">No orders found</h3>
-            <p className="text-gray-600">
+          <CardContent className="p-8 sm:p-12 text-center">
+            <Package className="h-8 sm:h-12 w-8 sm:w-12 text-gray-400 mx-auto mb-4" />
+            <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-2">No orders found</h3>
+            <p className="text-sm sm:text-base text-gray-600">
               {orders.length === 0 
                 ? "You don't have any orders yet." 
                 : "No orders match the selected filter."
@@ -215,35 +263,45 @@ const OrderManagement = ({ merchantId }: OrderManagementProps) => {
       {/* Order Details Dialog */}
       {selectedOrder && (
         <Dialog open={!!selectedOrder} onOpenChange={() => setSelectedOrder(null)}>
-          <DialogContent className="max-w-2xl">
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>Order Details - {selectedOrder.id}</DialogTitle>
-              <DialogDescription>
+              <DialogTitle className="text-lg">Order Details - {selectedOrder.id}</DialogTitle>
+              <DialogDescription className="text-sm">
                 Complete order information and customer details
               </DialogDescription>
             </DialogHeader>
             
-            <div className="space-y-6">
+            <div className="space-y-4 sm:space-y-6">
+              {/* Timer Display for Pending Orders */}
+              {selectedOrder.status === 'pending' && selectedOrder.timeRemaining !== undefined && (
+                <div className="flex items-center justify-center p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                  <Timer className="h-5 w-5 text-yellow-600 mr-2" />
+                  <span className="font-semibold text-yellow-800">
+                    Time to accept: {formatTimer(selectedOrder.timeRemaining)}
+                  </span>
+                </div>
+              )}
+
               {/* Customer Info */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <h4 className="font-semibold mb-2">Customer Information</h4>
-                  <div className="space-y-2 text-sm">
+                  <h4 className="font-semibold mb-2 text-sm">Customer Information</h4>
+                  <div className="space-y-2 text-xs sm:text-sm">
                     <p><strong>Name:</strong> {selectedOrder.customerName}</p>
                     <p><strong>Phone:</strong> {selectedOrder.customerPhone}</p>
                     <div className="flex items-start gap-2">
-                      <MapPin className="h-4 w-4 mt-0.5 text-gray-500" />
-                      <span>{selectedOrder.customerAddress}</span>
+                      <MapPin className="h-4 w-4 mt-0.5 text-gray-500 shrink-0" />
+                      <span className="break-words">{selectedOrder.customerAddress}</span>
                     </div>
                   </div>
                 </div>
                 
                 <div>
-                  <h4 className="font-semibold mb-2">Order Information</h4>
-                  <div className="space-y-2 text-sm">
+                  <h4 className="font-semibold mb-2 text-sm">Order Information</h4>
+                  <div className="space-y-2 text-xs sm:text-sm">
                     <p><strong>Order Time:</strong> {formatTime(selectedOrder.orderTime)}</p>
-                    <p><strong>Status:</strong> 
-                      <Badge className={`ml-2 ${getStatusColor(selectedOrder.status)}`}>
+                    <p className="flex items-center gap-2"><strong>Status:</strong> 
+                      <Badge className={`${getStatusColor(selectedOrder.status)} text-xs`}>
                         {selectedOrder.status.replace('-', ' ').toUpperCase()}
                       </Badge>
                     </p>
@@ -256,34 +314,34 @@ const OrderManagement = ({ merchantId }: OrderManagementProps) => {
 
               {/* Order Items */}
               <div>
-                <h4 className="font-semibold mb-3">Order Items</h4>
+                <h4 className="font-semibold mb-3 text-sm">Order Items</h4>
                 <div className="space-y-3">
                   {selectedOrder.items.map((item, index) => (
                     <div key={index} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                      <div>
-                        <p className="font-medium">{item.productName}</p>
-                        <p className="text-sm text-gray-600">Quantity: {item.quantity}</p>
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium text-sm">{item.productName}</p>
+                        <p className="text-xs text-gray-600">Quantity: {item.quantity}</p>
                         {item.customization && (
-                          <p className="text-sm text-blue-600">Note: {item.customization}</p>
+                          <p className="text-xs text-blue-600">Note: {item.customization}</p>
                         )}
                       </div>
-                      <div className="text-right">
-                        <p className="font-semibold">₹{item.price * item.quantity}</p>
-                        <p className="text-sm text-gray-600">₹{item.price} each</p>
+                      <div className="text-right shrink-0">
+                        <p className="font-semibold text-sm">₹{item.price * item.quantity}</p>
+                        <p className="text-xs text-gray-600">₹{item.price} each</p>
                       </div>
                     </div>
                   ))}
                 </div>
                 
                 <div className="mt-4 pt-4 border-t flex justify-between items-center">
-                  <span className="text-lg font-semibold">Total Amount:</span>
-                  <span className="text-xl font-bold text-green-600">₹{selectedOrder.totalAmount}</span>
+                  <span className="text-base sm:text-lg font-semibold">Total Amount:</span>
+                  <span className="text-lg sm:text-xl font-bold text-green-600">₹{selectedOrder.totalAmount}</span>
                 </div>
               </div>
             </div>
 
-            <DialogFooter className="flex gap-2">
-              <Button variant="outline" onClick={() => callCustomer(selectedOrder.customerPhone)}>
+            <DialogFooter className="flex flex-col sm:flex-row gap-2">
+              <Button variant="outline" onClick={() => callCustomer(selectedOrder.customerPhone)} className="w-full sm:w-auto">
                 <Phone className="h-4 w-4 mr-2" />
                 Call Customer
               </Button>
@@ -295,6 +353,7 @@ const OrderManagement = ({ merchantId }: OrderManagementProps) => {
                       updateOrderStatus(selectedOrder.id, 'declined');
                       setSelectedOrder(null);
                     }}
+                    className="w-full sm:w-auto"
                   >
                     Decline Order
                   </Button>
@@ -303,6 +362,7 @@ const OrderManagement = ({ merchantId }: OrderManagementProps) => {
                       updateOrderStatus(selectedOrder.id, 'accepted');
                       setSelectedOrder(null);
                     }}
+                    className="w-full sm:w-auto"
                   >
                     Accept Order
                   </Button>
@@ -314,6 +374,7 @@ const OrderManagement = ({ merchantId }: OrderManagementProps) => {
                     updateOrderStatus(selectedOrder.id, 'in-delivery');
                     setSelectedOrder(null);
                   }}
+                  className="w-full sm:w-auto"
                 >
                   Mark as In Delivery
                 </Button>
@@ -324,6 +385,7 @@ const OrderManagement = ({ merchantId }: OrderManagementProps) => {
                     updateOrderStatus(selectedOrder.id, 'delivered');
                     setSelectedOrder(null);
                   }}
+                  className="w-full sm:w-auto"
                 >
                   Mark as Delivered
                 </Button>
@@ -340,12 +402,14 @@ const OrderCard = ({
   order, 
   onUpdateStatus, 
   onCallCustomer, 
-  onViewDetails 
+  onViewDetails,
+  formatTimer
 }: {
   order: Order;
   onUpdateStatus: (orderId: string, status: Order['status']) => void;
   onCallCustomer: (phone: string) => void;
   onViewDetails: () => void;
+  formatTimer: (seconds: number) => string;
 }) => {
   const getStatusIcon = (status: Order['status']) => {
     switch (status) {
@@ -378,73 +442,82 @@ const OrderCard = ({
 
   return (
     <Card className="hover:shadow-lg transition-shadow">
-      <CardHeader>
-        <div className="flex justify-between items-start">
-          <div>
-            <CardTitle className="text-lg">Order {order.id}</CardTitle>
-            <CardDescription>{order.customerName} • {formatTime(order.orderTime)}</CardDescription>
+      <CardHeader className="pb-3">
+        <div className="flex flex-col sm:flex-row justify-between items-start gap-2">
+          <div className="min-w-0 flex-1">
+            <CardTitle className="text-base sm:text-lg">Order {order.id}</CardTitle>
+            <CardDescription className="text-sm">{order.customerName} • {formatTime(order.orderTime)}</CardDescription>
           </div>
-          <Badge className={`flex items-center gap-1 ${getStatusColor(order.status)}`}>
-            {getStatusIcon(order.status)}
-            {order.status.replace('-', ' ').toUpperCase()}
-          </Badge>
+          <div className="flex flex-col items-end gap-2">
+            <Badge className={`flex items-center gap-1 ${getStatusColor(order.status)} text-xs`}>
+              {getStatusIcon(order.status)}
+              {order.status.replace('-', ' ').toUpperCase()}
+            </Badge>
+            {/* NEW: Timer badge for pending orders */}
+            {order.status === 'pending' && order.timeRemaining !== undefined && order.timeRemaining > 0 && (
+              <Badge variant="outline" className="flex items-center gap-1 text-xs border-yellow-400 text-yellow-700">
+                <Timer className="h-3 w-3" />
+                {formatTimer(order.timeRemaining)}
+              </Badge>
+            )}
+          </div>
         </div>
       </CardHeader>
       
       <CardContent className="space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <h4 className="font-semibold text-sm mb-2">Items ({order.items.length})</h4>
             <div className="space-y-1">
               {order.items.slice(0, 2).map((item, index) => (
-                <p key={index} className="text-sm text-gray-600">
+                <p key={index} className="text-xs sm:text-sm text-gray-600">
                   {item.quantity}x {item.productName}
                 </p>
               ))}
               {order.items.length > 2 && (
-                <p className="text-sm text-gray-500">+{order.items.length - 2} more items</p>
+                <p className="text-xs text-gray-500">+{order.items.length - 2} more items</p>
               )}
             </div>
           </div>
           
-          <div className="text-right">
-            <p className="text-2xl font-bold text-green-600">₹{order.totalAmount}</p>
+          <div className="text-left sm:text-right">
+            <p className="text-xl sm:text-2xl font-bold text-green-600">₹{order.totalAmount}</p>
             {order.estimatedDelivery && (
-              <p className="text-sm text-gray-600">
+              <p className="text-xs sm:text-sm text-gray-600">
                 ETA: {formatTime(order.estimatedDelivery)}
               </p>
             )}
           </div>
         </div>
 
-        <div className="flex gap-2 pt-4 border-t">
-          <Button size="sm" variant="outline" onClick={onViewDetails}>
+        <div className="flex flex-wrap gap-2 pt-4 border-t">
+          <Button size="sm" variant="outline" onClick={onViewDetails} className="text-xs">
             View Details
           </Button>
-          <Button size="sm" variant="outline" onClick={() => onCallCustomer(order.customerPhone)}>
+          <Button size="sm" variant="outline" onClick={() => onCallCustomer(order.customerPhone)} className="text-xs">
             <Phone className="h-3 w-3 mr-1" />
             Call
           </Button>
           
           {order.status === 'pending' && (
             <>
-              <Button size="sm" variant="destructive" onClick={() => onUpdateStatus(order.id, 'declined')}>
+              <Button size="sm" variant="destructive" onClick={() => onUpdateStatus(order.id, 'declined')} className="text-xs">
                 Decline
               </Button>
-              <Button size="sm" onClick={() => onUpdateStatus(order.id, 'accepted')}>
+              <Button size="sm" onClick={() => onUpdateStatus(order.id, 'accepted')} className="text-xs">
                 Accept
               </Button>
             </>
           )}
           
           {order.status === 'accepted' && (
-            <Button size="sm" onClick={() => onUpdateStatus(order.id, 'in-delivery')}>
+            <Button size="sm" onClick={() => onUpdateStatus(order.id, 'in-delivery')} className="text-xs">
               Start Delivery
             </Button>
           )}
           
           {order.status === 'in-delivery' && (
-            <Button size="sm" onClick={() => onUpdateStatus(order.id, 'delivered')}>
+            <Button size="sm" onClick={() => onUpdateStatus(order.id, 'delivered')} className="text-xs">
               Mark Delivered
             </Button>
           )}

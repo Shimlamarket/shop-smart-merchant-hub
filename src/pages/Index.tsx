@@ -32,50 +32,53 @@ const DashboardContent = () => {
         onProfileClick={() => setShowProfile(true)}
       />
       
-      <div className="container mx-auto p-6">
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+      <div className="container mx-auto p-3 sm:p-6">
+        {/* Stats Cards - IMPROVED MOBILE */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6 mb-6 sm:mb-8">
           {stats.map((stat, index) => (
             <Card key={index} className="hover:shadow-lg transition-shadow">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-gray-600">
+                <CardTitle className="text-xs sm:text-sm font-medium text-gray-600 truncate">
                   {stat.title}
                 </CardTitle>
-                <stat.icon className={`h-4 w-4 ${stat.color}`} />
+                <stat.icon className={`h-3 w-3 sm:h-4 sm:w-4 ${stat.color} shrink-0`} />
               </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{stat.value}</div>
+              <CardContent className="pb-2">
+                <div className="text-lg sm:text-2xl font-bold">{stat.value}</div>
               </CardContent>
             </Card>
           ))}
         </div>
 
-        {/* Main Content Tabs */}
-        <Tabs defaultValue="products" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="products" className="flex items-center gap-2">
-              <Package className="h-4 w-4" />
-              Products
+        {/* Main Content Tabs - IMPROVED MOBILE */}
+        <Tabs defaultValue="products" className="space-y-4 sm:space-y-6">
+          <TabsList className="grid w-full grid-cols-3 h-auto">
+            <TabsTrigger value="products" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm py-2">
+              <Package className="h-3 w-3 sm:h-4 sm:w-4" />
+              <span className="hidden xs:inline">Products</span>
+              <span className="xs:hidden">Items</span>
             </TabsTrigger>
-            <TabsTrigger value="orders" className="flex items-center gap-2">
-              <ShoppingCart className="h-4 w-4" />
-              Orders
+            <TabsTrigger value="orders" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm py-2">
+              <ShoppingCart className="h-3 w-3 sm:h-4 sm:w-4" />
+              <span className="hidden xs:inline">Orders</span>
+              <span className="xs:hidden">Orders</span>
             </TabsTrigger>
-            <TabsTrigger value="settings" className="flex items-center gap-2">
-              <Settings className="h-4 w-4" />
-              Settings
+            <TabsTrigger value="settings" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm py-2">
+              <Settings className="h-3 w-3 sm:h-4 sm:w-4" />
+              <span className="hidden xs:inline">Settings</span>
+              <span className="xs:hidden">Settings</span>
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="products">
+          <TabsContent value="products" className="mt-4 sm:mt-6">
             <ProductManagement merchantId={merchantId} />
           </TabsContent>
 
-          <TabsContent value="orders">
+          <TabsContent value="orders" className="mt-4 sm:mt-6">
             <OrderManagement merchantId={merchantId} />
           </TabsContent>
 
-          <TabsContent value="settings">
+          <TabsContent value="settings" className="mt-4 sm:mt-6">
             <MerchantSettings merchantId={merchantId} />
           </TabsContent>
         </Tabs>

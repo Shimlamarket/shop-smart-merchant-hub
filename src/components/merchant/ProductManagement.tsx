@@ -87,7 +87,7 @@ const ProductManagement = ({ merchantId }: ProductManagementProps) => {
     setFilteredProducts(mockProducts);
   }, []);
 
-  // Filter and search logic
+  // Filter and search logic with FIXED SORTING
   useEffect(() => {
     let filtered = products;
 
@@ -102,13 +102,13 @@ const ProductManagement = ({ merchantId }: ProductManagementProps) => {
       filtered = filtered.filter(product => product.category === selectedCategory);
     }
 
-    // Fixed sorting logic
+    // FIXED: Correct sorting implementation
     filtered.sort((a, b) => {
       switch (sortBy) {
         case 'price-low':
-          return a.sellingPrice - b.sellingPrice;
+          return a.sellingPrice - b.sellingPrice; // Low to High (ascending)
         case 'price-high':
-          return b.sellingPrice - a.sellingPrice;
+          return b.sellingPrice - a.sellingPrice; // High to Low (descending)
         case 'quantity':
           return b.quantity - a.quantity;
         default:
@@ -173,47 +173,50 @@ const ProductManagement = ({ merchantId }: ProductManagementProps) => {
   };
 
   return (
-    <div className="space-y-4 lg:space-y-6">
-      {/* Header with Actions */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h2 className="text-xl lg:text-2xl font-bold text-gray-900">Product Management</h2>
-          <p className="text-sm lg:text-base text-gray-600">Manage your inventory and product offerings</p>
+    <div className="space-y-4 lg:space-y-6 px-2 sm:px-0">
+      {/* Header with Actions - IMPROVED MOBILE */}
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div className="min-w-0 flex-1">
+            <h2 className="text-xl lg:text-2xl font-bold text-gray-900 truncate">Product Management</h2>
+            <p className="text-sm lg:text-base text-gray-600">Manage your inventory and product offerings</p>
+          </div>
+          <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+            <DialogTrigger asChild>
+              <Button className="flex items-center gap-2 w-full sm:w-auto shrink-0">
+                <Plus className="h-4 w-4" />
+                <span className="hidden xs:inline">Add Product</span>
+                <span className="xs:hidden">Add</span>
+              </Button>
+            </DialogTrigger>
+            <ProductDialog 
+              onSubmit={handleCreateProduct} 
+              categories={allCategories}
+              onAddCategory={(category) => setCustomCategories(prev => [...prev, category])}
+            />
+          </Dialog>
         </div>
-        <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-          <DialogTrigger asChild>
-            <Button className="flex items-center gap-2 w-full sm:w-auto">
-              <Plus className="h-4 w-4" />
-              Add Product
-            </Button>
-          </DialogTrigger>
-          <ProductDialog 
-            onSubmit={handleCreateProduct} 
-            categories={allCategories}
-            onAddCategory={(category) => setCustomCategories(prev => [...prev, category])}
-          />
-        </Dialog>
       </div>
 
-      {/* Filters and Search */}
+      {/* Filters and Search - IMPROVED MOBILE */}
       <Card>
-        <CardContent className="p-4 lg:p-6">
-          <div className="flex flex-col gap-4">
+        <CardContent className="p-3 sm:p-4 lg:p-6">
+          <div className="flex flex-col gap-3 sm:gap-4">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
               <Input
                 placeholder="Search products or brands..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10"
+                className="pl-10 text-sm"
               />
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-                <SelectTrigger>
+                <SelectTrigger className="text-sm">
                   <SelectValue placeholder="Category" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="bg-white border shadow-lg z-50">
                   <SelectItem value="all">ALL CATEGORIES</SelectItem>
                   {allCategories.map(category => (
                     <SelectItem key={category} value={category}>
@@ -223,10 +226,10 @@ const ProductManagement = ({ merchantId }: ProductManagementProps) => {
                 </SelectContent>
               </Select>
               <Select value={sortBy} onValueChange={setSortBy}>
-                <SelectTrigger>
+                <SelectTrigger className="text-sm">
                   <SelectValue placeholder="Sort by" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="bg-white border shadow-lg z-50">
                   <SelectItem value="name">Name A-Z</SelectItem>
                   <SelectItem value="price-low">Price Low to High</SelectItem>
                   <SelectItem value="price-high">Price High to Low</SelectItem>
@@ -238,8 +241,8 @@ const ProductManagement = ({ merchantId }: ProductManagementProps) => {
         </CardContent>
       </Card>
 
-      {/* Products Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 lg:gap-6">
+      {/* Products Grid - IMPROVED MOBILE */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4 lg:gap-6">
         {filteredProducts.map(product => (
           <ProductCard
             key={product.id}
@@ -263,18 +266,19 @@ const ProductManagement = ({ merchantId }: ProductManagementProps) => {
         </Dialog>
       )}
 
+      {/* Empty State - IMPROVED MOBILE */}
       {filteredProducts.length === 0 && (
         <Card>
-          <CardContent className="p-8 lg:p-12 text-center">
-            <Package className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">No products found</h3>
-            <p className="text-gray-600 mb-4">
+          <CardContent className="p-6 sm:p-8 lg:p-12 text-center">
+            <Package className="h-8 sm:h-12 w-8 sm:w-12 text-gray-400 mx-auto mb-4" />
+            <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-2">No products found</h3>
+            <p className="text-sm sm:text-base text-gray-600 mb-4 px-4">
               {products.length === 0 
                 ? "You haven't added any products yet. Start by creating your first product."
                 : "No products match your current filters. Try adjusting your search or filters."
               }
             </p>
-            <Button onClick={() => setIsCreateDialogOpen(true)}>
+            <Button onClick={() => setIsCreateDialogOpen(true)} size="sm">
               <Plus className="h-4 w-4 mr-2" />
               Add Your First Product
             </Button>
@@ -295,20 +299,20 @@ const ProductCard = ({ product, onDelete, onEdit, onView }: {
 
   return (
     <Card className="hover:shadow-lg transition-shadow">
-      <CardHeader className="pb-3">
-        <div className="flex justify-between items-start">
+      <CardHeader className="pb-2 sm:pb-3">
+        <div className="flex justify-between items-start gap-2">
           <div className="min-w-0 flex-1">
-            <CardTitle className="text-base lg:text-lg truncate">{product.name}</CardTitle>
-            <CardDescription className="truncate">{product.brand}</CardDescription>
+            <CardTitle className="text-sm sm:text-base lg:text-lg truncate">{product.name}</CardTitle>
+            <CardDescription className="truncate text-xs sm:text-sm">{product.brand}</CardDescription>
           </div>
-          <Badge variant={product.quantity > 10 ? "default" : "destructive"} className="ml-2 shrink-0">
+          <Badge variant={product.quantity > 10 ? "default" : "destructive"} className="ml-2 shrink-0 text-xs">
             {product.quantity}
           </Badge>
         </div>
       </CardHeader>
-      <CardContent className="space-y-4">
-        {/* Product Image */}
-        <div className="w-full h-32 lg:h-40 rounded-lg overflow-hidden bg-gray-100">
+      <CardContent className="space-y-3 sm:space-y-4">
+        {/* Product Image - IMPROVED MOBILE */}
+        <div className="w-full h-24 sm:h-32 lg:h-40 rounded-lg overflow-hidden bg-gray-100">
           <img 
             src={product.images[0]} 
             alt={product.name}
@@ -318,10 +322,10 @@ const ProductCard = ({ product, onDelete, onEdit, onView }: {
 
         <div className="flex justify-between items-center">
           <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2">
-              <span className="text-lg font-bold text-green-600">₹{product.sellingPrice}</span>
+            <div className="flex items-center gap-1 sm:gap-2">
+              <span className="text-sm sm:text-lg font-bold text-green-600">₹{product.sellingPrice}</span>
               {discountPercentage > 0 && (
-                <span className="text-sm text-gray-500 line-through">₹{product.mrp}</span>
+                <span className="text-xs sm:text-sm text-gray-500 line-through">₹{product.mrp}</span>
               )}
             </div>
             {discountPercentage > 0 && (
@@ -347,16 +351,17 @@ const ProductCard = ({ product, onDelete, onEdit, onView }: {
           </div>
         )}
 
-        <div className="flex gap-2">
-          <Button size="sm" variant="outline" onClick={onView} className="flex-1">
+        {/* Action Buttons - IMPROVED MOBILE */}
+        <div className="flex gap-1 sm:gap-2">
+          <Button size="sm" variant="outline" onClick={onView} className="flex-1 text-xs sm:text-sm">
             <Eye className="h-3 w-3 mr-1" />
-            View
+            <span className="hidden xs:inline">View</span>
           </Button>
-          <Button size="sm" variant="outline" onClick={onEdit}>
+          <Button size="sm" variant="outline" onClick={onEdit} className="flex-1 text-xs sm:text-sm">
             <Edit className="h-3 w-3 mr-1" />
-            Edit
+            <span className="hidden xs:inline">Edit</span>
           </Button>
-          <Button size="sm" variant="destructive" onClick={() => onDelete(product.id)}>
+          <Button size="sm" variant="destructive" onClick={() => onDelete(product.id)} className="px-2">
             <Trash2 className="h-3 w-3" />
           </Button>
         </div>
