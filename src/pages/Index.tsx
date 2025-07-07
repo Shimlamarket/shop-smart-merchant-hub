@@ -1,5 +1,5 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AuthProvider, useAuth } from '@/components/auth/AuthProvider';
@@ -9,19 +9,88 @@ import OrderManagement from "@/components/merchant/OrderManagement";
 import MerchantSettings from "@/components/merchant/MerchantSettings";
 import MerchantProfile from "@/components/merchant/MerchantProfile";
 import { Package, ShoppingCart, Settings, TrendingUp } from "lucide-react";
+import { apiService, DashboardAnalytics } from '@/services/api';
+import { useToast } from "@/hooks/use-toast";
 
 const DashboardContent = () => {
   const { user, logout } = useAuth();
+  const { toast } = useToast();
   const [merchantId] = useState("merchant-123");
   const [isAcceptingOrders, setIsAcceptingOrders] = useState(true);
   const [showProfile, setShowProfile] = useState(false);
+  const [dashboardData, setDashboardData] = useState<DashboardAnalytics | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  // Load dashboard analytics from API
+  useEffect(() => {
+    const loadDashboardData = async () => {
+      try {
+        setLoading(true);
+        const analytics = await apiService.getDashboardAnalytics();
+        setDashboardData(analytics);
+      } catch (error) {
+        console.error('Error loading dashboard data:', error);
+        toast({
+          title: "Error",
+          description: "Failed to load dashboard data. Please try again.",
+          variant: "destructive"
+        });
+        // Fallback to default stats if API fails
+        setDashboardData({
+          orders_today: 0,
+          revenue_today: 0,
+          active_offers: 0,
+          low_stock_products: 0,
+          total_products: 0,
+          pending_orders: 0,
+          top_products: [],
+          recent_orders: []
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadDashboardData();
+  }, [toast]);
 
   const stats = [
-    { title: "Total Products", value: "142", icon: Package, color: "text-blue-600" },
-    { title: "Pending Orders", value: "8", icon: ShoppingCart, color: "text-orange-600" },
-    { title: "Active Offers", value: "3", icon: TrendingUp, color: "text-green-600" },
-    { title: "Revenue Today", value: "₹2,450", icon: TrendingUp, color: "text-purple-600" }
+    { 
+      title: "Total Products", 
+      value: dashboardData?.total_products?.toString() || "0", 
+      icon: Package, 
+      color: "text-blue-600" 
+    },
+    { 
+      title: "Pending Orders", 
+      value: dashboardData?.pending_orders?.toString() || "0", 
+      icon: ShoppingCart, 
+      color: "text-orange-600" 
+    },
+    { 
+      title: "Active Offers", 
+      value: dashboardData?.active_offers?.toString() || "0", 
+      icon: TrendingUp, 
+      color: "text-green-600" 
+    },
+    { 
+      title: "Revenue Today", 
+      value: dashboardData ? `₹${dashboardData.revenue_today}` : "₹0", 
+      icon: TrendingUp, 
+      color: "text-purple-600" 
+    }
   ];
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-lg text-gray-600">Loading dashboard...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">

@@ -11,28 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Plus, Search, Edit, Trash2, Package, X, Eye } from "lucide-react";
 import { useNavigate } from 'react-router-dom';
 import OfferDialog from './OfferDialog';
-
-interface Product {
-  id: string;
-  name: string;
-  category: string;
-  brand: string;
-  mrp: number;
-  sellingPrice: number;
-  quantity: number;
-  description: string;
-  images: string[];
-  variations: string[];
-  offers: Offer[];
-}
-
-interface Offer {
-  id: string;
-  type: 'percentage' | 'bogo' | 'fixed' | 'custom';
-  value: number;
-  description: string;
-  customType?: string;
-}
+import { apiService, Product, Offer } from '@/services/api';
 
 interface ProductManagementProps {
   merchantId: string;
@@ -49,56 +28,30 @@ const ProductManagement = ({ merchantId }: ProductManagementProps) => {
   const [sortBy, setSortBy] = useState<string>('name');
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  const defaultCategories = ['biscuits', 'cold_drinks', 'ice_cream', 'snacks', 'beverages'];
-  const allCategories = [...defaultCategories, ...customCategories];
-
-  // Mock data initialization
+  // Load products from API
   useEffect(() => {
-    const mockProducts: Product[] = [
-      {
-        id: '1',
-        name: 'Coca Cola 500ml',
-        category: 'cold_drinks',
-        brand: 'Coca Cola',
-        mrp: 40,
-        sellingPrice: 35,
-        quantity: 50,
-        description: 'Refreshing cola drink',
-        images: ['https://images.unsplash.com/photo-1618160702438-9b02ab6515c9?w=300&h=300&fit=crop'],
-        variations: ['500ml', '1L', '2L'],
-        offers: [{ id: '1', type: 'percentage', value: 12.5, description: '12.5% off on MRP' }]
-      },
-      {
-        id: '2',
-        name: 'Parle-G Biscuits',
-        category: 'biscuits',
-        brand: 'Parle',
-        mrp: 25,
-        sellingPrice: 23,
-        quantity: 100,
-        description: 'Classic glucose biscuits',
-        images: ['https://images.unsplash.com/photo-1582562124811-c09040d0a901?w=300&h=300&fit=crop'],
-        variations: ['100g', '200g', '500g'],
-        offers: [{ id: '2', type: 'bogo', value: 1, description: 'Buy 1 Get 1 Free' }]
-      },
-      {
-        id: '3',
-        name: 'Premium Ice Cream',
-        category: 'ice_cream',
-        brand: 'Kwality',
-        mrp: 120,
-        sellingPrice: 100,
-        quantity: 25,
-        description: 'Delicious vanilla ice cream',
-        images: ['https://images.unsplash.com/photo-1501443762994-82bd5dace89a?w=300&h=300&fit=crop'],
-        variations: ['500ml', '1L'],
-        offers: []
+    const loadProducts = async () => {
+      try {
+        setLoading(true);
+        const productsData = await apiService.getProducts();
+        setProducts(productsData);
+        setFilteredProducts(productsData);
+      } catch (error) {
+        console.error('Error loading products:', error);
+        toast({
+          title: "Error",
+          description: "Failed to load products. Please try again.",
+          variant: "destructive"
+        });
+      } finally {
+        setLoading(false);
       }
-    ];
-    setProducts(mockProducts);
-    setFilteredProducts(mockProducts);
-  }, []);
+    };
+
+    loadProducts();
+  }, [toast]);
 
   // Get available categories (only show categories that have products)
   const getAvailableCategories = () => {
@@ -125,79 +78,96 @@ const ProductManagement = ({ merchantId }: ProductManagementProps) => {
     filtered.sort((a, b) => {
       switch (sortBy) {
         case 'price-low':
-          return b.sellingPrice - a.sellingPrice; // Low to High (ascending)
+          return (a.variants[0]?.selling_price || 0) - (b.variants[0]?.selling_price || 0);
         case 'price-high':
-          return a.sellingPrice - b.sellingPrice;// High to Low (descending)
+          return (b.variants[0]?.selling_price || 0) - (a.variants[0]?.selling_price || 0);
         case 'quantity-high':
-          return a.quantity - b.quantity; // High to Low
+          return (b.variants[0]?.stock_quantity || 0) - (a.variants[0]?.stock_quantity || 0);
         case 'quantity-low':
-          return b.quantity - a.quantity; // Low to High
+          return (a.variants[0]?.stock_quantity || 0) - (b.variants[0]?.stock_quantity || 0);
         case 'name-az':
-          return b.name.localeCompare(a.name);// A to Z
+          return a.name.localeCompare(b.name);
         case 'name-za':
-          return a.name.localeCompare(b.name); // Z to A
-        default:
           return b.name.localeCompare(a.name);
+        default:
+          return a.name.localeCompare(b.name);
       }
     });
 
     setFilteredProducts(filtered);
   }, [products, searchQuery, selectedCategory, sortBy]);
 
-  const handleCreateProduct = (productData: Partial<Product>) => {
-    const newProduct: Product = {
-      id: Date.now().toString(),
-      name: productData.name || '',
-      category: productData.category || '',
-      brand: productData.brand || '',
-      mrp: productData.mrp || 0,
-      sellingPrice: productData.sellingPrice || 0,
-      quantity: productData.quantity || 0,
-      description: productData.description || '',
-      images: productData.images || ['https://images.unsplash.com/photo-1535268647677-300dbf3d78d1?w=300&h=300&fit=crop'],
-      variations: productData.variations || [],
-      offers: productData.offers || []
-    };
-
-    if (productData.category && !allCategories.includes(productData.category)) {
-      setCustomCategories(prev => [...prev, productData.category!]);
+  const handleCreateProduct = async (productData: Partial<Product>) => {
+    try {
+      const newProduct = await apiService.createProduct(productData);
+      setProducts(prev => [...prev, newProduct]);
+      setIsCreateDialogOpen(false);
+      toast({
+        title: "Product Created",
+        description: `${newProduct.name} has been added successfully.`,
+      });
+    } catch (error) {
+      console.error('Error creating product:', error);
+      toast({
+        title: "Error",
+        description: "Failed to create product. Please try again.",
+        variant: "destructive"
+      });
     }
-
-    setProducts(prev => [...prev, newProduct]);
-    setIsCreateDialogOpen(false);
-    toast({
-      title: "Product Created",
-      description: `${newProduct.name} has been added successfully.`,
-    });
   };
 
-  const handleUpdateProduct = (productData: Partial<Product>) => {
+  const handleUpdateProduct = async (productData: Partial<Product>) => {
     if (!editingProduct) return;
     
-    const updatedProduct = { ...editingProduct, ...productData };
-    
-    if (productData.category && !allCategories.includes(productData.category)) {
-      setCustomCategories(prev => [...prev, productData.category!]);
+    try {
+      const updatedProduct = await apiService.updateProduct(editingProduct.product_id, productData);
+      setProducts(prev => prev.map(p => p.product_id === editingProduct.product_id ? updatedProduct : p));
+      setEditingProduct(null);
+      toast({
+        title: "Product Updated",
+        description: `${updatedProduct.name} has been updated successfully.`,
+      });
+    } catch (error) {
+      console.error('Error updating product:', error);
+      toast({
+        title: "Error",
+        description: "Failed to update product. Please try again.",
+        variant: "destructive"
+      });
     }
-
-    setProducts(prev => prev.map(p => p.id === editingProduct.id ? updatedProduct : p));
-    setEditingProduct(null);
-    toast({
-      title: "Product Updated",
-      description: `${updatedProduct.name} has been updated successfully.`,
-    });
   };
 
-  const handleDeleteProduct = (productId: string) => {
-    setProducts(prev => prev.filter(p => p.id !== productId));
-    toast({
-      title: "Product Deleted",
-      description: "Product has been removed from your inventory.",
-      variant: "destructive"
-    });
+  const handleDeleteProduct = async (productId: string) => {
+    try {
+      await apiService.deleteProduct(productId);
+      setProducts(prev => prev.filter(p => p.product_id !== productId));
+      toast({
+        title: "Product Deleted",
+        description: "Product has been removed from your inventory.",
+        variant: "destructive"
+      });
+    } catch (error) {
+      console.error('Error deleting product:', error);
+      toast({
+        title: "Error",
+        description: "Failed to delete product. Please try again.",
+        variant: "destructive"
+      });
+    }
   };
 
   const availableCategories = getAvailableCategories();
+
+  if (loading) {
+    return (
+      <div className="space-y-4 lg:space-y-6 px-2 sm:px-0">
+        <div className="flex justify-center items-center py-12">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          <span className="ml-2">Loading products...</span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4 lg:space-y-6 px-2 sm:px-0">
@@ -218,7 +188,7 @@ const ProductManagement = ({ merchantId }: ProductManagementProps) => {
             </DialogTrigger>
             <ProductDialog 
               onSubmit={handleCreateProduct} 
-              categories={allCategories}
+              categories={availableCategories}
               onAddCategory={(category) => setCustomCategories(prev => [...prev, category])}
             />
           </Dialog>
@@ -274,11 +244,11 @@ const ProductManagement = ({ merchantId }: ProductManagementProps) => {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4 lg:gap-6">
         {filteredProducts.map(product => (
           <ProductCard
-            key={product.id}
+            key={product.product_id}
             product={product}
             onDelete={handleDeleteProduct}
             onEdit={() => setEditingProduct(product)}
-            onView={() => navigate(`/product/${product.id}`)}
+            onView={() => navigate(`/product/${product.product_id}`)}
           />
         ))}
       </div>
@@ -289,7 +259,7 @@ const ProductManagement = ({ merchantId }: ProductManagementProps) => {
           <ProductDialog 
             onSubmit={handleUpdateProduct} 
             product={editingProduct}
-            categories={allCategories}
+            categories={availableCategories}
             onAddCategory={(category) => setCustomCategories(prev => [...prev, category])}
           />
         </Dialog>
@@ -324,7 +294,7 @@ const ProductCard = ({ product, onDelete, onEdit, onView }: {
   onEdit: () => void;
   onView: () => void;
 }) => {
-  const discountPercentage = Math.round(((product.mrp - product.sellingPrice) / product.mrp) * 100);
+  const discountPercentage = product.variants[0] ? Math.round(((product.variants[0].mrp - product.variants[0].selling_price) / product.variants[0].mrp) * 100) : 0;
 
   return (
     <Card className="hover:shadow-lg transition-shadow">
@@ -334,8 +304,8 @@ const ProductCard = ({ product, onDelete, onEdit, onView }: {
             <CardTitle className="text-sm sm:text-base lg:text-lg truncate">{product.name}</CardTitle>
             <CardDescription className="truncate text-xs sm:text-sm">{product.brand}</CardDescription>
           </div>
-          <Badge variant={product.quantity > 10 ? "default" : "destructive"} className="ml-2 shrink-0 text-xs">
-            {product.quantity}
+          <Badge variant={product.variants[0]?.stock_quantity > 10 ? "default" : "destructive"} className="ml-2 shrink-0 text-xs">
+            {product.variants[0]?.stock_quantity}
           </Badge>
         </div>
       </CardHeader>
@@ -352,9 +322,9 @@ const ProductCard = ({ product, onDelete, onEdit, onView }: {
         <div className="flex justify-between items-center">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1 sm:gap-2">
-              <span className="text-sm sm:text-lg font-bold text-green-600">₹{product.sellingPrice}</span>
+              <span className="text-sm sm:text-lg font-bold text-green-600">₹{product.variants[0]?.selling_price}</span>
               {discountPercentage > 0 && (
-                <span className="text-xs sm:text-sm text-gray-500 line-through">₹{product.mrp}</span>
+                <span className="text-xs sm:text-sm text-gray-500 line-through">₹{product.variants[0]?.mrp}</span>
               )}
             </div>
             {discountPercentage > 0 && (
@@ -368,8 +338,8 @@ const ProductCard = ({ product, onDelete, onEdit, onView }: {
         {product.offers.length > 0 && (
           <div className="space-y-1">
             {product.offers.slice(0, 2).map(offer => (
-              <Badge key={offer.id} variant="outline" className="text-xs mr-1">
-                {offer.description}
+              <Badge key={offer.offer_id} variant="outline" className="text-xs mr-1">
+                {offer.name}
               </Badge>
             ))}
             {product.offers.length > 2 && (
@@ -390,7 +360,7 @@ const ProductCard = ({ product, onDelete, onEdit, onView }: {
             <Edit className="h-3 w-3 mr-1" />
             <span className="hidden xs:inline">Edit</span>
           </Button>
-          <Button size="sm" variant="destructive" onClick={() => onDelete(product.id)} className="px-2">
+          <Button size="sm" variant="destructive" onClick={() => onDelete(product.product_id)} className="px-2">
             <Trash2 className="h-3 w-3" />
           </Button>
         </div>
@@ -409,11 +379,11 @@ const ProductDialog = ({ onSubmit, product, categories, onAddCategory }: {
     name: product?.name || '',
     category: product?.category || '',
     brand: product?.brand || '',
-    mrp: product?.mrp || 0,
-    sellingPrice: product?.sellingPrice || 0,
-    quantity: product?.quantity || 0,
+    mrp: product?.variants[0]?.mrp || 0,
+    sellingPrice: product?.variants[0]?.selling_price || 0,
+    quantity: product?.variants[0]?.stock_quantity || 0,
     description: product?.description || '',
-    variations: product?.variations?.join(', ') || '',
+    variations: product?.variants?.map(v => v.name).join(', ') || '',
     images: product?.images || []
   });
   const [newCategory, setNewCategory] = useState('');
@@ -442,11 +412,13 @@ const ProductDialog = ({ onSubmit, product, categories, onAddCategory }: {
 
   const handleAddOffer = (offerData: Partial<Offer>) => {
     const newOffer: Offer = {
-      id: Date.now().toString(),
+      offer_id: Date.now().toString(),
+      name: offerData.name || '',
       type: offerData.type || 'percentage',
-      value: offerData.value || 0,
-      description: offerData.description || '',
-      customType: offerData.customType
+      discount_value: offerData.discount_value || 0,
+      valid_from: offerData.valid_from || '',
+      valid_till: offerData.valid_till || '',
+      is_active: true
     };
     setOffers(prev => [...prev, newOffer]);
     setIsOfferDialogOpen(false);
@@ -455,12 +427,12 @@ const ProductDialog = ({ onSubmit, product, categories, onAddCategory }: {
   const handleUpdateOffer = (offerData: Partial<Offer>) => {
     if (!editingOffer) return;
     const updatedOffer = { ...editingOffer, ...offerData };
-    setOffers(prev => prev.map(offer => offer.id === editingOffer.id ? updatedOffer : offer));
+    setOffers(prev => prev.map(offer => offer.offer_id === editingOffer.offer_id ? updatedOffer : offer));
     setEditingOffer(null);
   };
 
   const handleDeleteOffer = (offerId: string) => {
-    setOffers(prev => prev.filter(offer => offer.id !== offerId));
+    setOffers(prev => prev.filter(offer => offer.offer_id !== offerId));
   };
 
   const handleSubmit = () => {
@@ -468,14 +440,21 @@ const ProductDialog = ({ onSubmit, product, categories, onAddCategory }: {
     
     if (showNewCategory && newCategory.trim()) {
       finalCategory = newCategory.trim().toLowerCase().replace(/\s+/g, '_');
-      onAddCategory(finalCategory);
     }
 
     onSubmit({
-      ...formData,
+      name: formData.name,
       category: finalCategory,
-      variations: formData.variations.split(',').map(v => v.trim()).filter(Boolean),
-      offers
+      brand: formData.brand,
+      description: formData.description,
+      images: formData.images,
+      variants: [{
+        name: formData.variations,
+        mrp: formData.mrp,
+        selling_price: formData.sellingPrice,
+        stock_quantity: formData.quantity
+      }],
+      offers: offers
     });
   };
 
@@ -657,18 +636,18 @@ const ProductDialog = ({ onSubmit, product, categories, onAddCategory }: {
             {offers.length > 0 ? (
               <div className="space-y-2 max-h-40 overflow-y-auto">
                 {offers.map(offer => (
-                  <div key={offer.id} className="flex justify-between items-center p-2 bg-green-50 rounded border border-green-200">
+                  <div key={offer.offer_id} className="flex justify-between items-center p-2 bg-green-50 rounded border border-green-200">
                     <div className="min-w-0 flex-1">
                       <Badge className="mb-1 text-xs">
-                        {offer.customType || offer.type.toUpperCase()}
+                        {offer.type.toUpperCase()}
                       </Badge>
-                      <p className="text-xs text-gray-700 truncate">{offer.description}</p>
+                      <p className="text-xs text-gray-700 truncate">{offer.name}</p>
                     </div>
                     <div className="flex gap-1 ml-2">
                       <Button size="sm" variant="outline" onClick={() => setEditingOffer(offer)} className="h-6 px-2">
                         <Edit className="h-3 w-3" />
                       </Button>
-                      <Button size="sm" variant="destructive" onClick={() => handleDeleteOffer(offer.id)} className="h-6 px-2">
+                      <Button size="sm" variant="destructive" onClick={() => handleDeleteOffer(offer.offer_id)} className="h-6 px-2">
                         <Trash2 className="h-3 w-3" />
                       </Button>
                     </div>
