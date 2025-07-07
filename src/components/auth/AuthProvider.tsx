@@ -6,6 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { User, Mail, Lock, Store } from "lucide-react";
+import { apiService, setAuthToken, clearAuthToken } from '@/services/api';
+import { useGoogleAuth } from '@/hooks/useGoogleAuth';
 
 interface User {
   id: string;
@@ -38,6 +40,7 @@ interface AuthProviderProps {
 
 export const AuthProvider = ({ children }: AuthProviderProps) => {
   const { toast } = useToast();
+  const { signInWithGoogle, isLoading: googleLoading } = useGoogleAuth();
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -53,7 +56,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const login = async (email: string, password: string) => {
     setIsLoading(true);
     try {
-      // Simulate API call
+      // For demo purposes - you might want to implement actual email/password login
       await new Promise(resolve => setTimeout(resolve, 1000));
       
       const mockUser: User = {
@@ -81,37 +84,50 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   };
 
   const loginWithGoogle = async () => {
-    setIsLoading(true);
     try {
-      // Simulate OAuth flow
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      setIsLoading(true);
       
-      const mockUser: User = {
-        id: 'merchant-google-123',
-        name: 'Rajesh Kumar',
-        email: 'rajesh.kumar@gmail.com',
-        profileImage: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face'
+      // Get Google access token
+      const accessToken = await signInWithGoogle();
+      console.log('Google access token received:', accessToken);
+      
+      // Authenticate with our backend
+      const response = await apiService.loginWithGoogle(accessToken);
+      console.log('Backend auth response:', response);
+      
+      // Store the auth token
+      setAuthToken(response.token);
+      
+      // Create user object from merchant data
+      const merchantUser: User = {
+        id: response.merchant.merchant_id || 'merchant-google-123',
+        name: response.merchant.name || 'Merchant User',
+        email: response.merchant.email || 'merchant@example.com',
+        profileImage: response.merchant.profile_image || 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face'
       };
       
-      setUser(mockUser);
-      localStorage.setItem('merchant_user', JSON.stringify(mockUser));
+      setUser(merchantUser);
+      localStorage.setItem('merchant_user', JSON.stringify(merchantUser));
       
       toast({
         title: "Login Successful",
         description: "Welcome! You've signed in with Google.",
       });
-    } catch (error) {
+    } catch (error: any) {
+      console.error('Google login error:', error);
       toast({
         title: "Login Failed",
-        description: "Google authentication failed. Please try again.",
+        description: error.message || "Google authentication failed. Please try again.",
         variant: "destructive"
       });
+    } finally {
+      setIsLoading(false);
     }
-    setIsLoading(false);
   };
 
   const logout = () => {
     setUser(null);
+    clearAuthToken();
     localStorage.removeItem('merchant_user');
     toast({
       title: "Logged Out",
@@ -119,7 +135,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     });
   };
 
-  if (isLoading) {
+  if (isLoading || googleLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
         <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>

@@ -1,5 +1,24 @@
-
 const API_BASE_URL = 'http://localhost:8080';
+
+// Store auth token
+let authToken: string | null = null;
+
+export const setAuthToken = (token: string) => {
+  authToken = token;
+  localStorage.setItem('auth_token', token);
+};
+
+export const getAuthToken = (): string | null => {
+  if (!authToken) {
+    authToken = localStorage.getItem('auth_token');
+  }
+  return authToken;
+};
+
+export const clearAuthToken = () => {
+  authToken = null;
+  localStorage.removeItem('auth_token');
+};
 
 // Types based on the API documentation
 export interface Product {
@@ -97,11 +116,13 @@ export interface DashboardAnalytics {
 class ApiService {
   private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
     const url = `${API_BASE_URL}${endpoint}`;
+    const token = getAuthToken();
+    
     const response = await fetch(url, {
       headers: {
         'Content-Type': 'application/json',
-        // Add auth header when needed
-        // 'Authorization': `Bearer ${getAuthToken()}`
+        ...(token && { 'Authorization': `Bearer ${token}` }),
+        ...options.headers,
       },
       ...options,
     });
@@ -111,6 +132,14 @@ class ApiService {
     }
 
     return response.json();
+  }
+
+  // Authentication
+  async loginWithGoogle(accessToken: string): Promise<{ token: string; merchant: any }> {
+    return this.request<{ token: string; merchant: any }>('/auth/google', {
+      method: 'POST',
+      body: JSON.stringify({ access_token: accessToken }),
+    });
   }
 
   // Product Management
