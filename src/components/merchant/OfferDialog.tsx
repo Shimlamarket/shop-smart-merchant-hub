@@ -7,14 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { X } from "lucide-react";
-
-interface Offer {
-  id: string;
-  type: 'percentage' | 'bogo' | 'fixed' | 'custom';
-  value: number;
-  description: string;
-  customType?: string;
-}
+import { Offer } from '@/services/api';
 
 interface OfferDialogProps {
   onSubmit: (data: Partial<Offer>) => void;
@@ -23,9 +16,12 @@ interface OfferDialogProps {
 
 const OfferDialog = ({ onSubmit, offer }: OfferDialogProps) => {
   const [formData, setFormData] = useState({
+    name: offer?.name || '',
     type: offer?.type || 'percentage' as const,
-    value: offer?.value || 0,
+    discount_value: offer?.discount_value || 0,
     description: offer?.description || '',
+    valid_from: offer?.valid_from || '',
+    valid_till: offer?.valid_till || '',
     customType: offer?.customType || ''
   });
   const [showCustomType, setShowCustomType] = useState(offer?.type === 'custom' || false);
@@ -49,7 +45,12 @@ const OfferDialog = ({ onSubmit, offer }: OfferDialogProps) => {
 
   const handleSubmit = () => {
     onSubmit({
-      ...formData,
+      name: formData.name,
+      type: formData.type,
+      discount_value: formData.discount_value,
+      description: formData.description,
+      valid_from: formData.valid_from,
+      valid_till: formData.valid_till,
       customType: showCustomType ? formData.customType : undefined
     });
   };
@@ -90,6 +91,17 @@ const OfferDialog = ({ onSubmit, offer }: OfferDialogProps) => {
       </DialogHeader>
       
       <div className="space-y-4">
+        {/* Offer Name */}
+        <div className="space-y-2">
+          <Label htmlFor="name">Offer Name</Label>
+          <Input
+            id="name"
+            value={formData.name}
+            onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+            placeholder="Enter offer name"
+          />
+        </div>
+
         {/* Offer Type */}
         <div className="space-y-2">
           <Label htmlFor="type">Offer Type</Label>
@@ -122,15 +134,37 @@ const OfferDialog = ({ onSubmit, offer }: OfferDialogProps) => {
 
         {/* Value */}
         <div className="space-y-2">
-          <Label htmlFor="value">{getValueLabel()}</Label>
+          <Label htmlFor="discount_value">{getValueLabel()}</Label>
           <Input
-            id="value"
+            id="discount_value"
             type="number"
             min="0"
             step={formData.type === 'percentage' ? '0.1' : '1'}
-            value={formData.value}
-            onChange={(e) => setFormData(prev => ({ ...prev, value: parseFloat(e.target.value) || 0 }))}
+            value={formData.discount_value}
+            onChange={(e) => setFormData(prev => ({ ...prev, discount_value: parseFloat(e.target.value) || 0 }))}
             placeholder={getValuePlaceholder()}
+          />
+        </div>
+
+        {/* Valid From */}
+        <div className="space-y-2">
+          <Label htmlFor="valid_from">Valid From</Label>
+          <Input
+            id="valid_from"
+            type="date"
+            value={formData.valid_from}
+            onChange={(e) => setFormData(prev => ({ ...prev, valid_from: e.target.value }))}
+          />
+        </div>
+
+        {/* Valid Till */}
+        <div className="space-y-2">
+          <Label htmlFor="valid_till">Valid Till</Label>
+          <Input
+            id="valid_till"
+            type="date"
+            value={formData.valid_till}
+            onChange={(e) => setFormData(prev => ({ ...prev, valid_till: e.target.value }))}
           />
         </div>
 

@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -449,10 +450,12 @@ const ProductDialog = ({ onSubmit, product, categories, onAddCategory }: {
       description: formData.description,
       images: formData.images,
       variants: [{
-        name: formData.variations,
+        id: product?.variants[0]?.id || `var_${Date.now()}`,
+        name: formData.variations || 'Default',
         mrp: formData.mrp,
         selling_price: formData.sellingPrice,
-        stock_quantity: formData.quantity
+        stock_quantity: formData.quantity,
+        sku: product?.variants[0]?.sku || `SKU_${Date.now()}`
       }],
       offers: offers
     });
