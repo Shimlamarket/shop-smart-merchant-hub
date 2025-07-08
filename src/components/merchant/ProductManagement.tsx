@@ -35,12 +35,15 @@ const ProductManagement = ({ merchantId }: ProductManagementProps) => {
     const loadProducts = async () => {
       try {
         setLoading(true);
-        const productsData = await apiService.getProducts();
-        setProducts(productsData);
-        setFilteredProducts(productsData);
+        const products = await apiService.getProducts("1");
+        
+        setProducts(products);
+        setFilteredProducts(products);
         
         // Extract unique categories
-        const categories = [...new Set(productsData.map(p => p.category))];
+        console.log("products:", products);
+
+        const categories = [...new Set(products.map(p => p.category))];
         setCustomCategories(categories);
       } catch (error: any) {
         console.error('Error loading products:', error);
