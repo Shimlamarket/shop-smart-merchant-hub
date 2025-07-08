@@ -3,7 +3,7 @@ import axios from 'axios';
 
 // Create axios instance with base configuration
 const api = axios.create({
-  baseURL: 'http://localhost:8001/api',  // FastAPI server
+  baseURL: 'http://localhost:8002',  // Merchant API server
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json',
@@ -13,7 +13,7 @@ const api = axios.create({
 // Request interceptor to add auth token
 api.interceptors.request.use(
   (config) => {
-    const token = sessionStorage.getItem('merchant_token') || localStorage.getItem('merchant_token');
+    const token = localStorage.getItem('auth_token'); // Use same token key as AuthProvider
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -44,8 +44,7 @@ api.interceptors.response.use(
     // Handle HTTP errors
     if (error.response?.status === 401) {
       console.error('❌ Authentication Error: Invalid token');
-      sessionStorage.removeItem('merchant_token');
-      localStorage.removeItem('merchant_token');
+      localStorage.removeItem('auth_token'); // Use same token key as AuthProvider
       // Don't reload automatically, let the auth context handle it
     }
     
@@ -85,8 +84,7 @@ export const authApi = {
 // ============ DASHBOARD API ============
 export const dashboardApi = {
   async getDashboard() {
-    const merchantId = getCurrentMerchantId();
-    const response = await api.get(`/merchants/${merchantId}/dashboard`);
+    const response = await api.get('/dashboard');
     return response.data;
   }
 };
@@ -94,8 +92,7 @@ export const dashboardApi = {
 // ============ MERCHANT PROFILE API ============
 export const merchantApi = {
   async getProfile() {
-    const merchantId = getCurrentMerchantId();
-    const response = await api.get(`/merchants/${merchantId}/profile`);
+    const response = await api.get('/profile');
     return response.data;
   },
 
