@@ -138,8 +138,8 @@ const DashboardContent = () => {
           {user?.merchantData && (
             <div className="text-right">
               <p className="text-sm text-gray-500">Store Status</p>
-              <p className={`font-semibold ${user.merchantData.shop_status.is_open ? 'text-green-600' : 'text-red-600'}`}>
-                {user.merchantData.shop_status.is_open ? 'Open' : 'Closed'}
+              <p className={`font-semibold ${user.merchantData.is_active ? 'text-green-600' : 'text-red-600'}`}>
+                {user.merchantData.is_active ? 'Open' : 'Closed'}
               </p>
             </div>
           )}
@@ -231,7 +231,7 @@ const DashboardContent = () => {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                {dashboardData.top_products.length > 0 ? (
+                {false ? (
                   <div className="space-y-4">
                     {dashboardData.top_products.slice(0, 5).map((product, index) => (
                       <div key={product.product_id} className="flex items-center gap-4">
