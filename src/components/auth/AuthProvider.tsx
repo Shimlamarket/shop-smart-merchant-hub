@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { User, Mail, Lock, Store } from "lucide-react";
-import { apiService, setAuthToken, clearAuthToken, getAuthToken, Merchant } from '@/services/api';
+import { apiService, setAuthToken, clearAuthToken, getAuthToken, User as user } from '@/services/api';
 import { useGoogleAuth } from '@/hooks/useGoogleAuth';
 
 interface User {
@@ -13,7 +13,7 @@ interface User {
   name: string;
   email: string;
   profileImage: string;
-  merchantData?: Merchant;
+  merchantData?: user;
 }
 
 interface AuthContextType {
@@ -47,10 +47,19 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   useEffect(() => {
     // Check for stored user session
     const storedUser = localStorage.getItem('merchant_user');
-    const token = getAuthToken();
+    const token = localStorage.getItem('auth_token');
+    
+    console.log('🔄 AuthProvider useEffect - checking stored session...');
+    console.log('📄 Stored user:', storedUser);
+    console.log('🔑 Stored token:', token);
     
     if (storedUser && token) {
+      // Initialize the auth token in the API service
+      setAuthToken(token);
       setUser(JSON.parse(storedUser));
+      console.log('✅ Session restored successfully');
+    } else {
+      console.log('❌ No valid session found');
     }
     setIsLoading(false);
   }, []);
@@ -99,15 +108,18 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       console.log('Backend auth response:', response);
       
       // Store the auth token
-      setAuthToken(response.access_token);
-      
+      setAuthToken(response.token);
+      localStorage.setItem('auth_token', response.token);
+      console.log('Full auth response:', response);
+      console.log('Stored auth token:', localStorage.getItem('auth_token'));
+      console.log('Token verification:', response.token);
       // Create user object from merchant data
       const merchantUser: User = {
-        id: response.merchant.merchant_id,
-        name: response.merchant.business_name || 'Merchant User',
-        email: response.merchant.email,
+        id: response.user.user_id,
+        name: response.user.business_name || 'Merchant User',
+        email: response.user.email,
         profileImage: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face',
-        merchantData: response.merchant
+        merchantData: response.user
       };
       
       setUser(merchantUser);
