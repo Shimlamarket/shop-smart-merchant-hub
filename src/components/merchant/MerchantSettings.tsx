@@ -4,620 +4,444 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
-import { AlertTriangle, Save, Settings, Percent, Gift, Bell, MapPin, X, Navigation } from "lucide-react";
-
-interface MerchantMetadata {
-  storeName: string;
-  description: string;
-  address: string;
-  phone: string;
-  email: string;
-  businessHours: {
-    open: string;
-    close: string;
-  };
-  deliveryRadius: number;
-  minimumOrderAmount: number;
-  location?: {
-    latitude: number;
-    longitude: number;
-  };
-}
-
-interface GlobalOffer {
-  id: string;
-  type: 'percentage' | 'bogo' | 'minimum_order' | 'custom';
-  value: number;
-  description: string;
-  isActive: boolean;
-  validUntil?: string;
-  customType?: string;
-}
+import { Store, Clock, MapPin, Phone, Mail, Save, Bell, Shield } from "lucide-react";
+import { apiService, Merchant } from '@/services/api';
 
 interface MerchantSettingsProps {
   merchantId: string;
+  isAcceptingOrders: boolean;
+  onToggleOrders: (accepting: boolean) => void;
 }
 
-const MerchantSettings = ({ merchantId }: MerchantSettingsProps) => {
+const MerchantSettings = ({ merchantId, isAcceptingOrders, onToggleOrders }: MerchantSettingsProps) => {
   const { toast } = useToast();
-  const [isGettingLocation, setIsGettingLocation] = useState(false);
-  const [metadata, setMetadata] = useState<MerchantMetadata>({
-    storeName: 'My Store',
-    description: 'Fresh groceries and daily essentials',
-    address: '123 Main Street, City, State - 123456',
-    phone: '+91 9876543210',
-    email: 'store@example.com',
-    businessHours: { open: '09:00', close: '21:00' },
-    deliveryRadius: 5,
-    minimumOrderAmount: 50,
-    location: {
-      latitude: 28.6139,
-      longitude: 77.2090
+  const [merchant, setMerchant] = useState<Merchant | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [formData, setFormData] = useState({
+    business_name: '',
+    business_type: '',
+    email: '',
+    phone: '',
+    address: '',
+    latitude: 0,
+    longitude: 0,
+    subscription_plan: 'basic',
+    shop_status: {
+      is_open: true,
+      accepting_orders: true,
+      reason: ''
     }
   });
 
-  const [globalOffers, setGlobalOffers] = useState<GlobalOffer[]>([
-    {
-      id: '1',
-      type: 'percentage',
-      value: 10,
-      description: '10% off on orders above ₹500',
-      isActive: true,
-      validUntil: '2024-02-15'
-    },
-    {
-      id: '2',
-      type: 'bogo',
-      value: 1,
-      description: 'Buy 1 Get 1 Free on selected items',
-      isActive: false
-    }
-  ]);
-
+  // Notification settings
   const [notifications, setNotifications] = useState({
-    newOrders: true,
-    lowStock: true,
-    customerMessages: true,
-    dailyReports: false
+    email_orders: true,
+    email_offers: true,
+    push_orders: true,
+    push_promotions: false,
+    sms_important: true
   });
 
-  const [inventoryCount, setInventoryCount] = useState(142);
+  // Operating hours
+  const [operatingHours, setOperatingHours] = useState({
+    monday: { open: '09:00', close: '21:00', closed: false },
+    tuesday: { open: '09:00', close: '21:00', closed: false },
+    wednesday: { open: '09:00', close: '21:00', closed: false },
+    thursday: { open: '09:00', close: '21:00', closed: false },
+    friday: { open: '09:00', close: '21:00', closed: false },
+    saturday: { open: '09:00', close: '22:00', closed: false },
+    sunday: { open: '10:00', close: '20:00', closed: false }
+  });
 
-  const updateMetadata = () => {
-    // API call would go here: PUT /merchants/:merchantId/update-merchant-metadata
-    toast({
-      title: "Settings Updated",
-      description: "Merchant metadata has been successfully updated.",
-    });
-  };
+  useEffect(() => {
+    loadMerchantProfile();
+  }, []);
 
-  const toggleGlobalOffer = (offerId: string) => {
-    setGlobalOffers(prev => prev.map(offer => 
-      offer.id === offerId 
-        ? { ...offer, isActive: !offer.isActive }
-        : offer
-    ));
-    toast({
-      title: "Offer Updated",
-      description: "Global offer status has been changed.",
-    });
-  };
-
-  const addGlobalOffer = (newOffer: Omit<GlobalOffer, 'id'>) => {
-    const offer: GlobalOffer = {
-      ...newOffer,
-      id: Date.now().toString()
-    };
-    setGlobalOffers(prev => [...prev, offer]);
-    toast({
-      title: "Offer Created",
-      description: "New global offer has been added successfully.",
-    });
-  };
-
-  const removeGlobalOffer = (offerId: string) => {
-    setGlobalOffers(prev => prev.filter(offer => offer.id !== offerId));
-    toast({
-      title: "Offer Removed",
-      description: "Global offer has been deleted.",
-      variant: "destructive"
-    });
-  };
-
-  const getCurrentLocation = () => {
-    if (!navigator.geolocation) {
+  const loadMerchantProfile = async () => {
+    try {
+      setLoading(true);
+      const merchantData = await apiService.getMerchantProfile();
+      setMerchant(merchantData);
+      setFormData({
+        business_name: merchantData.business_name,
+        business_type: merchantData.business_type,
+        email: merchantData.email,
+        phone: merchantData.phone || '',
+        address: merchantData.address,
+        latitude: merchantData.latitude || 0,
+        longitude: merchantData.longitude || 0,
+        subscription_plan: merchantData.subscription_plan,
+        shop_status: merchantData.shop_status
+      });
+    } catch (error: any) {
+      console.error('Error loading merchant profile:', error);
       toast({
-        title: "Geolocation Not Supported",
-        description: "Your browser doesn't support location services.",
+        title: "Error",
+        description: error.message || "Failed to load merchant profile.",
         variant: "destructive"
       });
-      return;
+    } finally {
+      setLoading(false);
     }
-
-    setIsGettingLocation(true);
-    
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const { latitude, longitude } = position.coords;
-        setMetadata(prev => ({ 
-          ...prev, 
-          location: { latitude, longitude }
-        }));
-        setIsGettingLocation(false);
-        toast({
-          title: "Location Updated",
-          description: "Your current location has been automatically filled.",
-        });
-      },
-      (error) => {
-        setIsGettingLocation(false);
-        let errorMessage = "Unable to get your location.";
-        
-        switch (error.code) {
-          case error.PERMISSION_DENIED:
-            errorMessage = "Location access denied. Please enable location services.";
-            break;
-          case error.POSITION_UNAVAILABLE:
-            errorMessage = "Location information is unavailable.";
-            break;
-          case error.TIMEOUT:
-            errorMessage = "Location request timed out.";
-            break;
-        }
-        
-        toast({
-          title: "Location Error",
-          description: errorMessage,
-          variant: "destructive"
-        });
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 60000
-      }
-    );
   };
 
+  const handleSaveProfile = async () => {
+    try {
+      setSaving(true);
+      const updatedMerchant = await apiService.updateMerchantProfile(formData);
+      setMerchant(updatedMerchant);
+      
+      toast({
+        title: "Profile Updated",
+        description: "Your merchant profile has been updated successfully.",
+      });
+    } catch (error: any) {
+      console.error('Error updating profile:', error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update profile.",
+        variant: "destructive"
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleToggleShopStatus = async (isOpen: boolean) => {
+    try {
+      const updatedData = {
+        ...formData,
+        shop_status: {
+          ...formData.shop_status,
+          is_open: isOpen
+        }
+      };
+      
+      await apiService.updateMerchantProfile(updatedData);
+      setFormData(updatedData);
+      
+      toast({
+        title: isOpen ? "Shop Opened" : "Shop Closed",
+        description: `Your shop is now ${isOpen ? 'open' : 'closed'} for customers.`,
+      });
+    } catch (error: any) {
+      console.error('Error updating shop status:', error);
+      toast({
+        title: "Error",
+        description: "Failed to update shop status.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  if (loading) {
+    return (
+      <Card>
+        <CardContent className="flex items-center justify-center py-8">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
-    <div className="space-y-4 sm:space-y-6 px-2 sm:px-0">
-      {/* Header */}
-      <div>
-        <h2 className="text-xl sm:text-2xl font-bold text-gray-900">Merchant Settings</h2>
-        <p className="text-sm sm:text-base text-gray-600">Manage your store information and business settings</p>
-      </div>
-
-      {/* Low Inventory Alert */}
-      {inventoryCount === 0 && (
-        <Card className="border-orange-200 bg-orange-50">
-          <CardContent className="p-3 sm:p-4">
-            <div className="flex items-center gap-3">
-              <AlertTriangle className="h-5 w-5 text-orange-600 shrink-0" />
-              <div className="min-w-0">
-                <p className="font-semibold text-orange-800 text-sm sm:text-base">Inventory Alert</p>
-                <p className="text-xs sm:text-sm text-orange-700">
-                  You have no items in your inventory. Add products to start receiving orders.
-                </p>
-              </div>
+    <div className="space-y-6">
+      {/* Shop Status */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Store className="w-5 h-5" />
+            Shop Status
+          </CardTitle>
+          <CardDescription>
+            Control your shop availability and order acceptance
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+            <div>
+              <h3 className="font-medium">Shop Open/Closed</h3>
+              <p className="text-sm text-gray-600">
+                {formData.shop_status.is_open ? 'Customers can see and order from your shop' : 'Shop is hidden from customers'}
+              </p>
             </div>
-          </CardContent>
-        </Card>
-      )}
+            <Switch
+              checked={formData.shop_status.is_open}
+              onCheckedChange={handleToggleShopStatus}
+            />
+          </div>
+          
+          <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+            <div>
+              <h3 className="font-medium">Accept New Orders</h3>
+              <p className="text-sm text-gray-600">
+                {isAcceptingOrders ? 'New orders will be received' : 'New orders are paused'}
+              </p>
+            </div>
+            <Switch
+              checked={isAcceptingOrders}
+              onCheckedChange={onToggleOrders}
+            />
+          </div>
+        </CardContent>
+      </Card>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
-        {/* Store Information */}
-        <Card>
-          <CardHeader className="pb-4">
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <Settings className="h-5 w-5" />
-              Store Information
-            </CardTitle>
-            <CardDescription className="text-sm">Update your store details and contact information</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
+      {/* Business Information */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Store className="w-5 h-5" />
+            Business Information
+          </CardTitle>
+          <CardDescription>
+            Update your business details and contact information
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="storeName" className="text-sm">Store Name</Label>
+              <Label htmlFor="business_name">Business Name</Label>
               <Input
-                id="storeName"
-                value={metadata.storeName}
-                onChange={(e) => setMetadata(prev => ({ ...prev, storeName: e.target.value }))}
-                className="text-sm"
+                id="business_name"
+                value={formData.business_name}
+                onChange={(e) => setFormData(prev => ({ ...prev, business_name: e.target.value }))}
               />
             </div>
             
             <div className="space-y-2">
-              <Label htmlFor="description" className="text-sm">Description</Label>
-              <Textarea
-                id="description"
-                value={metadata.description}
-                onChange={(e) => setMetadata(prev => ({ ...prev, description: e.target.value }))}
-                rows={3}
-                className="text-sm"
-              />
+              <Label htmlFor="business_type">Business Type</Label>
+              <Select 
+                value={formData.business_type} 
+                onValueChange={(value) => setFormData(prev => ({ ...prev, business_type: value }))}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="grocery">Grocery Store</SelectItem>
+                  <SelectItem value="restaurant">Restaurant</SelectItem>
+                  <SelectItem value="pharmacy">Pharmacy</SelectItem>
+                  <SelectItem value="electronics">Electronics</SelectItem>
+                  <SelectItem value="clothing">Clothing</SelectItem>
+                  <SelectItem value="bakery">Bakery</SelectItem>
+                  <SelectItem value="other">Other</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="address" className="text-sm">Address</Label>
-              <Textarea
-                id="address"
-                value={metadata.address}
-                onChange={(e) => setMetadata(prev => ({ ...prev, address: e.target.value }))}
-                rows={2}
-                className="text-sm"
-              />
-            </div>
-
-            {/* Enhanced Geolocation Fields */}
-            <div className="space-y-3 p-3 border rounded-lg bg-gray-50">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <MapPin className="h-4 w-4 text-gray-600" />
-                  <Label className="text-sm font-medium">Store Location</Label>
-                </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={getCurrentLocation}
-                  disabled={isGettingLocation}
-                  className="text-xs"
-                >
-                  <Navigation className="h-3 w-3 mr-1" />
-                  {isGettingLocation ? 'Getting...' : 'Use Current Location'}
-                </Button>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="space-y-2">
-                  <Label htmlFor="latitude" className="text-xs text-gray-600">Latitude</Label>
-                  <Input
-                    id="latitude"
-                    type="number"
-                    step="any"
-                    placeholder="e.g. 28.6139"
-                    value={metadata.location?.latitude || ''}
-                    onChange={(e) => setMetadata(prev => ({ 
-                      ...prev, 
-                      location: { 
-                        ...prev.location,
-                        latitude: parseFloat(e.target.value) || 0,
-                        longitude: prev.location?.longitude || 0
-                      }
-                    }))}
-                    className="text-sm"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="longitude" className="text-xs text-gray-600">Longitude</Label>
-                  <Input
-                    id="longitude"
-                    type="number"
-                    step="any"
-                    placeholder="e.g. 77.2090"
-                    value={metadata.location?.longitude || ''}
-                    onChange={(e) => setMetadata(prev => ({ 
-                      ...prev, 
-                      location: { 
-                        ...prev.location,
-                        latitude: prev.location?.latitude || 0,
-                        longitude: parseFloat(e.target.value) || 0
-                      }
-                    }))}
-                    className="text-sm"
-                  />
-                </div>
-              </div>
-              <p className="text-xs text-gray-500">
-                Add your store's exact location to help customers find you and improve delivery accuracy. Click "Use Current Location" to auto-fill with your device's location.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="phone" className="text-sm">Phone</Label>
-                <Input
-                  id="phone"
-                  type="tel"
-                  value={metadata.phone}
-                  onChange={(e) => setMetadata(prev => ({ ...prev, phone: e.target.value }))}
-                  className="text-sm"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="email" className="text-sm">Email</Label>
+              <Label htmlFor="email">Email Address</Label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                 <Input
                   id="email"
                   type="email"
-                  value={metadata.email}
-                  onChange={(e) => setMetadata(prev => ({ ...prev, email: e.target.value }))}
-                  className="text-sm"
+                  value={formData.email}
+                  onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
+                  className="pl-10"
                 />
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="openTime" className="text-sm">Opening Time</Label>
+            <div className="space-y-2">
+              <Label htmlFor="phone">Phone Number</Label>
+              <div className="relative">
+                <Phone className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                 <Input
-                  id="openTime"
-                  type="time"
-                  value={metadata.businessHours.open}
-                  onChange={(e) => setMetadata(prev => ({ 
-                    ...prev, 
-                    businessHours: { ...prev.businessHours, open: e.target.value }
-                  }))}
-                  className="text-sm"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="closeTime" className="text-sm">Closing Time</Label>
-                <Input
-                  id="closeTime"
-                  type="time"
-                  value={metadata.businessHours.close}
-                  onChange={(e) => setMetadata(prev => ({ 
-                    ...prev, 
-                    businessHours: { ...prev.businessHours, close: e.target.value }
-                  }))}
-                  className="text-sm"
+                  id="phone"
+                  type="tel"
+                  value={formData.phone}
+                  onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
+                  className="pl-10"
                 />
               </div>
             </div>
+          </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="deliveryRadius" className="text-sm">Delivery Radius (km)</Label>
-                <Input
-                  id="deliveryRadius"
-                  type="number"
-                  value={metadata.deliveryRadius}
-                  onChange={(e) => setMetadata(prev => ({ ...prev, deliveryRadius: parseInt(e.target.value) || 0 }))}
-                  className="text-sm"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="minimumOrder" className="text-sm">Minimum Order (₹)</Label>
-                <Input
-                  id="minimumOrder"
-                  type="number"
-                  value={metadata.minimumOrderAmount}
-                  onChange={(e) => setMetadata(prev => ({ ...prev, minimumOrderAmount: parseInt(e.target.value) || 0 }))}
-                  className="text-sm"
-                />
-              </div>
-            </div>
-
-            <Button onClick={updateMetadata} className="w-full text-sm">
-              <Save className="h-4 w-4 mr-2" />
-              Save Store Information
-            </Button>
-          </CardContent>
-        </Card>
-
-        {/* Global Offers */}
-        <Card>
-          <CardHeader className="pb-4">
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <Gift className="h-5 w-5" />
-              Global Offers
-            </CardTitle>
-            <CardDescription className="text-sm">Manage store-wide discounts and promotional offers</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {globalOffers.map(offer => (
-              <GlobalOfferCard
-                key={offer.id}
-                offer={offer}
-                onToggle={() => toggleGlobalOffer(offer.id)}
-                onRemove={() => removeGlobalOffer(offer.id)}
+          <div className="space-y-2">
+            <Label htmlFor="address">Business Address</Label>
+            <div className="relative">
+              <MapPin className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+              <Textarea
+                id="address"
+                value={formData.address}
+                onChange={(e) => setFormData(prev => ({ ...prev, address: e.target.value }))}
+                className="pl-10"
+                rows={3}
               />
-            ))}
-            
-            <GlobalOfferForm onSubmit={addGlobalOffer} />
-          </CardContent>
-        </Card>
-      </div>
+            </div>
+          </div>
+
+          <Button onClick={handleSaveProfile} disabled={saving} className="w-full md:w-auto">
+            {saving ? (
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                Saving...
+              </div>
+            ) : (
+              <>
+                <Save className="w-4 h-4 mr-2" />
+                Save Changes
+              </>
+            )}
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* Operating Hours */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Clock className="w-5 h-5" />
+            Operating Hours
+          </CardTitle>
+          <CardDescription>
+            Set your shop opening and closing times for each day
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {Object.entries(operatingHours).map(([day, hours]) => (
+            <div key={day} className="flex items-center gap-4 p-3 border rounded-lg">
+              <div className="w-20 font-medium capitalize">{day}</div>
+              
+              <div className="flex items-center gap-2">
+                <Switch
+                  checked={!hours.closed}
+                  onCheckedChange={(checked) => 
+                    setOperatingHours(prev => ({
+                      ...prev,
+                      [day]: { ...prev[day as keyof typeof prev], closed: !checked }
+                    }))
+                  }
+                />
+                <span className="text-sm text-gray-600">
+                  {hours.closed ? 'Closed' : 'Open'}
+                </span>
+              </div>
+
+              {!hours.closed && (
+                <>
+                  <Input
+                    type="time"
+                    value={hours.open}
+                    onChange={(e) => 
+                      setOperatingHours(prev => ({
+                        ...prev,
+                        [day]: { ...prev[day as keyof typeof prev], open: e.target.value }
+                      }))
+                    }
+                    className="w-32"
+                  />
+                  <span className="text-gray-400">to</span>
+                  <Input
+                    type="time"
+                    value={hours.close}
+                    onChange={(e) => 
+                      setOperatingHours(prev => ({
+                        ...prev,
+                        [day]: { ...prev[day as keyof typeof prev], close: e.target.value }
+                      }))
+                    }
+                    className="w-32"
+                  />
+                </>
+              )}
+            </div>
+          ))}
+        </CardContent>
+      </Card>
 
       {/* Notification Settings */}
       <Card>
-        <CardHeader className="pb-4">
-          <CardTitle className="flex items-center gap-2 text-lg">
-            <Bell className="h-5 w-5" />
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Bell className="w-5 h-5" />
             Notification Preferences
           </CardTitle>
-          <CardDescription className="text-sm">Choose what notifications you want to receive</CardDescription>
+          <CardDescription>
+            Choose how you want to receive notifications
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {Object.entries(notifications).map(([key, value]) => (
-              <div key={key} className="flex items-center justify-between p-3 border rounded-lg">
-                <div className="min-w-0 flex-1">
-                  <Label htmlFor={key} className="capitalize text-sm font-medium">
-                    {key.replace(/([A-Z])/g, ' $1').trim()}
-                  </Label>
-                  <p className="text-xs text-gray-500 mt-1">
-                    {getNotificationDescription(key)}
-                  </p>
-                </div>
-                <Switch
-                  id={key}
-                  checked={value}
-                  onCheckedChange={(checked) => 
-                    setNotifications(prev => ({ ...prev, [key]: checked }))
-                  }
-                  className="shrink-0"
-                />
+          {[
+            { key: 'email_orders', label: 'Email for New Orders', description: 'Get email notifications for new orders' },
+            { key: 'email_offers', label: 'Email for Offer Updates', description: 'Receive emails about offer performance' },
+            { key: 'push_orders', label: 'Push Notifications for Orders', description: 'Real-time notifications for orders' },
+            { key: 'push_promotions', label: 'Push for Promotions', description: 'Marketing and promotional notifications' },
+            { key: 'sms_important', label: 'SMS for Important Updates', description: 'Critical updates via SMS' }
+          ].map((item) => (
+            <div key={item.key} className="flex items-center justify-between p-3 border rounded-lg">
+              <div>
+                <h3 className="font-medium">{item.label}</h3>
+                <p className="text-sm text-gray-600">{item.description}</p>
               </div>
-            ))}
+              <Switch
+                checked={notifications[item.key as keyof typeof notifications]}
+                onCheckedChange={(checked) => 
+                  setNotifications(prev => ({ ...prev, [item.key]: checked }))
+                }
+              />
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+
+      {/* Account & Security */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Shield className="w-5 h-5" />
+            Account & Security
+          </CardTitle>
+          <CardDescription>
+            Manage your account security and subscription
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="p-4 border rounded-lg">
+              <h3 className="font-medium mb-2">Subscription Plan</h3>
+              <p className="text-sm text-gray-600 mb-3">
+                Current plan: <span className="font-medium capitalize">{formData.subscription_plan}</span>
+              </p>
+              <Button variant="outline" size="sm">
+                Upgrade Plan
+              </Button>
+            </div>
+
+            <div className="p-4 border rounded-lg">
+              <h3 className="font-medium mb-2">Account Security</h3>
+              <p className="text-sm text-gray-600 mb-3">
+                Last login: {merchant?.created_at ? new Date(merchant.created_at).toLocaleDateString() : 'Unknown'}
+              </p>
+              <Button variant="outline" size="sm">
+                Change Password
+              </Button>
+            </div>
+          </div>
+
+          <div className="p-4 border border-red-200 bg-red-50 rounded-lg">
+            <h3 className="font-medium text-red-900 mb-2">Danger Zone</h3>
+            <p className="text-sm text-red-700 mb-3">
+              These actions cannot be undone. Please proceed with caution.
+            </p>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" className="text-red-600 border-red-300 hover:bg-red-50">
+                Deactivate Account
+              </Button>
+              <Button variant="destructive" size="sm">
+                Delete Account
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>
     </div>
   );
-};
-
-const GlobalOfferCard = ({ 
-  offer, 
-  onToggle, 
-  onRemove 
-}: {
-  offer: GlobalOffer;
-  onToggle: () => void;
-  onRemove: () => void;
-}) => {
-  return (
-    <div className="p-3 sm:p-4 border rounded-lg space-y-3">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex items-center gap-2 min-w-0 flex-1">
-          <Badge variant={offer.isActive ? "default" : "secondary"} className="shrink-0 text-xs">
-            {offer.isActive ? "Active" : "Inactive"}
-          </Badge>
-          {offer.customType && (
-            <Badge variant="outline" className="shrink-0 text-xs">
-              {offer.customType}
-            </Badge>
-          )}
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <Switch checked={offer.isActive} onCheckedChange={onToggle} />
-          <Button size="sm" variant="outline" onClick={onRemove} className="text-xs px-2">
-            Remove
-          </Button>
-        </div>
-      </div>
-      <p className="font-medium text-sm">{offer.description}</p>
-      
-      {offer.validUntil && (
-        <p className="text-xs text-gray-600">
-          Valid until: {new Date(offer.validUntil).toLocaleDateString()}
-        </p>
-      )}
-    </div>
-  );
-};
-
-const GlobalOfferForm = ({ onSubmit }: {
-  onSubmit: (offer: Omit<GlobalOffer, 'id'>) => void;
-}) => {
-  const [formData, setFormData] = useState({
-    type: 'percentage' as GlobalOffer['type'],
-    value: 0,
-    description: '',
-    validUntil: '',
-    customType: ''
-  });
-  const [showCustomType, setShowCustomType] = useState(false);
-
-  const handleSubmit = () => {
-    if (formData.description && formData.value > 0) {
-      onSubmit({
-        ...formData,
-        isActive: true,
-        validUntil: formData.validUntil || undefined,
-        customType: showCustomType ? formData.customType : undefined
-      });
-      setFormData({
-        type: 'percentage',
-        value: 0,
-        description: '',
-        validUntil: '',
-        customType: ''
-      });
-      setShowCustomType(false);
-    }
-  };
-
-  const offerTypes = [
-    { value: 'percentage', label: 'Percentage Discount' },
-    { value: 'bogo', label: 'Buy One Get One' },
-    { value: 'minimum_order', label: 'Minimum Order Discount' },
-    { value: 'custom', label: 'Custom Offer Type' }
-  ];
-
-  return (
-    <div className="p-3 sm:p-4 border-2 border-dashed rounded-lg space-y-3">
-      <h4 className="font-semibold text-sm">Add New Offer</h4>
-      
-      <div className="space-y-3">
-        {/* Offer Type Selection */}
-        <div className="space-y-2">
-          {!showCustomType ? (
-            <Select 
-              value={formData.type} 
-              onValueChange={(value) => {
-                if (value === 'custom') {
-                  setShowCustomType(true);
-                }
-                setFormData(prev => ({ ...prev, type: value as GlobalOffer['type'] }));
-              }}
-            >
-              <SelectTrigger className="text-sm">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="bg-white border shadow-lg z-50">
-                {offerTypes.map(type => (
-                  <SelectItem key={type.value} value={type.value}>
-                    {type.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          ) : (
-            <div className="flex gap-2">
-              <Input
-                placeholder="Enter custom offer type"
-                value={formData.customType}
-                onChange={(e) => setFormData(prev => ({ ...prev, customType: e.target.value }))}
-                className="text-sm"
-              />
-              <Button size="sm" variant="outline" onClick={() => setShowCustomType(false)}>
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
-          )}
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <Input
-            type="number"
-            placeholder="Value"
-            value={formData.value}
-            onChange={(e) => setFormData(prev => ({ ...prev, value: parseInt(e.target.value) || 0 }))}
-            className="text-sm"
-          />
-          <Input
-            type="date"
-            placeholder="Valid until (optional)"
-            value={formData.validUntil}
-            onChange={(e) => setFormData(prev => ({ ...prev, validUntil: e.target.value }))}
-            className="text-sm"
-          />
-        </div>
-        
-        <Input
-          placeholder="Offer description"
-          value={formData.description}
-          onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-          className="text-sm"
-        />
-        
-        <Button onClick={handleSubmit} size="sm" className="w-full">Add Offer</Button>
-      </div>
-    </div>
-  );
-};
-
-const getNotificationDescription = (key: string) => {
-  const descriptions = {
-    newOrders: "Get notified when new orders arrive",
-    lowStock: "Alert when product inventory is low",
-    customerMessages: "Receive customer inquiries and feedback",
-    dailyReports: "Daily summary of sales and performance"
-  };
-  return descriptions[key as keyof typeof descriptions] || "";
 };
 
 export default MerchantSettings;

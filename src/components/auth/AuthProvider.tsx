@@ -1,4 +1,3 @@
-
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -6,12 +5,15 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { User, Mail, Lock, Store } from "lucide-react";
+import { apiService, setAuthToken, clearAuthToken, getAuthToken, Merchant } from '@/services/api';
+import { useGoogleAuth } from '@/hooks/useGoogleAuth';
 
 interface User {
   id: string;
   name: string;
   email: string;
   profileImage: string;
+  merchantData?: Merchant;
 }
 
 interface AuthContextType {
@@ -38,13 +40,16 @@ interface AuthProviderProps {
 
 export const AuthProvider = ({ children }: AuthProviderProps) => {
   const { toast } = useToast();
+  const { signInWithGoogle, isLoading: googleLoading } = useGoogleAuth();
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     // Check for stored user session
     const storedUser = localStorage.getItem('merchant_user');
-    if (storedUser) {
+    const token = getAuthToken();
+    
+    if (storedUser && token) {
       setUser(JSON.parse(storedUser));
     }
     setIsLoading(false);
@@ -53,18 +58,19 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const login = async (email: string, password: string) => {
     setIsLoading(true);
     try {
-      // Simulate API call
+      // For demo purposes - implement actual email/password login
       await new Promise(resolve => setTimeout(resolve, 1000));
       
       const mockUser: User = {
         id: 'merchant-123',
-        name: 'Rajesh Kumar',
+        name: 'Demo Merchant',
         email: email,
         profileImage: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face'
       };
       
       setUser(mockUser);
       localStorage.setItem('merchant_user', JSON.stringify(mockUser));
+      setAuthToken('demo-token-' + Date.now());
       
       toast({
         title: "Login Successful",
@@ -81,37 +87,51 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   };
 
   const loginWithGoogle = async () => {
-    setIsLoading(true);
     try {
-      // Simulate OAuth flow
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      setIsLoading(true);
       
-      const mockUser: User = {
-        id: 'merchant-google-123',
-        name: 'Rajesh Kumar',
-        email: 'rajesh.kumar@gmail.com',
-        profileImage: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face'
+      // Get Google access token
+      const accessToken = await signInWithGoogle();
+      console.log('Google access token received:', accessToken);
+      
+      // Authenticate with our FastAPI backend
+      const response = await apiService.authenticateWithGoogle(accessToken);
+      console.log('Backend auth response:', response);
+      
+      // Store the auth token
+      setAuthToken(response.access_token);
+      
+      // Create user object from merchant data
+      const merchantUser: User = {
+        id: response.merchant.merchant_id,
+        name: response.merchant.business_name || 'Merchant User',
+        email: response.merchant.email,
+        profileImage: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face',
+        merchantData: response.merchant
       };
       
-      setUser(mockUser);
-      localStorage.setItem('merchant_user', JSON.stringify(mockUser));
+      setUser(merchantUser);
+      localStorage.setItem('merchant_user', JSON.stringify(merchantUser));
       
       toast({
         title: "Login Successful",
         description: "Welcome! You've signed in with Google.",
       });
-    } catch (error) {
+    } catch (error: any) {
+      console.error('Google login error:', error);
       toast({
         title: "Login Failed",
-        description: "Google authentication failed. Please try again.",
+        description: error.message || "Google authentication failed. Please try again.",
         variant: "destructive"
       });
+    } finally {
+      setIsLoading(false);
     }
-    setIsLoading(false);
   };
 
   const logout = () => {
     setUser(null);
+    clearAuthToken();
     localStorage.removeItem('merchant_user');
     toast({
       title: "Logged Out",
@@ -119,7 +139,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     });
   };
 
-  if (isLoading) {
+  if (isLoading || googleLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
         <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
@@ -157,22 +177,22 @@ const LoginScreen = ({ onLogin, onGoogleLogin, isLoading }: LoginScreenProps) =>
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
-          <div className="mx-auto w-12 h-12 bg-blue-600 rounded-lg flex items-center justify-center mb-4">
-            <Store className="h-6 w-6 text-white" />
+      <Card className="w-full max-w-md shadow-xl">
+        <CardHeader className="text-center space-y-4">
+          <div className="mx-auto w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center">
+            <Store className="w-8 h-8 text-white" />
           </div>
-          <CardTitle className="text-2xl font-bold">Merchant Login</CardTitle>
-          <CardDescription>
-            Sign in to access your merchant dashboard
+          <CardTitle className="text-2xl font-bold text-gray-900">Merchant Dashboard</CardTitle>
+          <CardDescription className="text-gray-600">
+            Sign in to manage your store and products
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-6">
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="email">Email Address</Label>
+              <Label htmlFor="email" className="text-gray-700">Email</Label>
               <div className="relative">
-                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                <Mail className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                 <Input
                   id="email"
                   type="email"
@@ -184,11 +204,10 @@ const LoginScreen = ({ onLogin, onGoogleLogin, isLoading }: LoginScreenProps) =>
                 />
               </div>
             </div>
-            
             <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
+              <Label htmlFor="password" className="text-gray-700">Password</Label>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                <Lock className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                 <Input
                   id="password"
                   type="password"
@@ -200,19 +219,18 @@ const LoginScreen = ({ onLogin, onGoogleLogin, isLoading }: LoginScreenProps) =>
                 />
               </div>
             </div>
-            
             <Button 
               type="submit" 
-              className="w-full" 
+              className="w-full bg-blue-600 hover:bg-blue-700"
               disabled={isLoading}
             >
-              {isLoading ? 'Signing in...' : 'Sign In'}
+              {isLoading ? "Signing in..." : "Sign In"}
             </Button>
           </form>
           
           <div className="relative">
             <div className="absolute inset-0 flex items-center">
-              <span className="w-full border-t" />
+              <span className="w-full border-t border-gray-300" />
             </div>
             <div className="relative flex justify-center text-xs uppercase">
               <span className="bg-white px-2 text-gray-500">Or continue with</span>
@@ -220,25 +238,23 @@ const LoginScreen = ({ onLogin, onGoogleLogin, isLoading }: LoginScreenProps) =>
           </div>
           
           <Button 
-            variant="outline" 
-            className="w-full" 
             onClick={onGoogleLogin}
+            variant="outline" 
+            className="w-full border-gray-300 hover:bg-gray-50"
             disabled={isLoading}
           >
-            <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24">
+            <svg className="w-4 h-4 mr-2" viewBox="0 0 24 24">
               <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
               <path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
               <path fill="currentColor" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
               <path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
             </svg>
-            {isLoading ? 'Connecting...' : 'Continue with Google'}
+            {isLoading ? "Connecting..." : "Continue with Google"}
           </Button>
           
-          <div className="text-center text-sm text-gray-600">
-            <p>Demo credentials:</p>
-            <p>Email: demo@merchant.com</p>
-            <p>Password: any password</p>
-          </div>
+          <p className="text-xs text-center text-gray-500">
+            By signing in, you agree to our Terms of Service and Privacy Policy
+          </p>
         </CardContent>
       </Card>
     </div>
