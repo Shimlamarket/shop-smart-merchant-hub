@@ -77,8 +77,9 @@ const OfferDialog = ({ isOpen, onClose, onSubmit, offer, productId, shopId, isEd
 
   const loadProducts = async () => {
     try {
-      const productsData = await apiService.getProducts();
-      setProducts(productsData);
+      // Use shopId if available, otherwise use a default shop ID
+      const products = await apiService.getProducts(shopId || "1");
+      setProducts(products);
     } catch (error: any) {
       console.error('Error loading products:', error);
       toast({
