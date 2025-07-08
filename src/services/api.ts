@@ -6,12 +6,17 @@ let authToken: string | null = null;
 
 export const setAuthToken = (token: string) => {
   authToken = token;
+  console.log(authToken)
   localStorage.setItem('auth_token', token);
+  console.log(getAuthToken())
 };
 
 export const getAuthToken = (): string | null => {
   if (!authToken) {
     authToken = localStorage.getItem('auth_token');
+    console.log('🔑 getAuthToken: Retrieved from localStorage:', authToken);
+  } else {
+    console.log('🔑 getAuthToken: Using cached token:', authToken);
   }
   return authToken;
 };
@@ -89,8 +94,8 @@ export interface OrderItem {
   product_name: string;
 }
 
-export interface Merchant {
-  merchant_id: string;
+export interface User {
+  user_id: string;
   business_name: string;
   business_type: string;
   email: string;
@@ -104,6 +109,7 @@ export interface Merchant {
     accepting_orders: boolean;
     reason?: string;
   };
+  is_active: boolean;
   created_at: string;
 }
 
@@ -130,35 +136,53 @@ export interface Review {
   created_at: string;
 }
 
+// Response interfaces for API endpoints
+export interface ProductsResponse {
+  products: Product[];
+}
+
 class ApiService {
   private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
     const url = `${API_BASE_URL}${endpoint}`;
+    console.log('🔗 API Request URL:', url);
     const token = getAuthToken();
+    console.log('🔑 Retrieved token:', token);
+    
+    const headers = {
+      'Content-Type': 'application/json',
+      ...(token && { 'Authorization': `Bearer ${token}` }),
+      ...options.headers,
+    };
+    
+    console.log('📋 Request headers:', headers);
     
     const response = await fetch(url, {
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token && { 'Authorization': `Bearer ${token}` }),
-        ...options.headers,
-      },
+      headers,
       ...options,
     });
 
+    console.log('📡 Response status:', response.status);
+    console.log('📡 Response headers:', Object.fromEntries(response.headers.entries()));
+
     if (!response.ok) {
       if (response.status === 401) {
+        console.error('❌ Authentication failed - clearing token');
         clearAuthToken();
         throw new Error('Authentication failed. Please login again.');
       }
       const errorText = await response.text();
+      console.error('❌ API Error:', response.status, response.statusText, errorText);
       throw new Error(`API Error: ${response.status} ${response.statusText} - ${errorText}`);
     }
 
-    return response.json();
+    const result = await response.json();
+    console.log('✅ API Response:', result);
+    return result;
   }
 
   // Authentication
-  async authenticateWithGoogle(accessToken: string): Promise<{ access_token: string; merchant: Merchant }> {
-    return this.request<{ access_token: string; merchant: Merchant }>('/auth/google', {
+  async authenticateWithGoogle(accessToken: string): Promise<{ token: string; user: User }> {
+    return this.request<{ token: string; user: User }>('/auth/google', {
       method: 'POST',
       body: JSON.stringify({ access_token: accessToken }),
     });
@@ -170,12 +194,13 @@ class ApiService {
   }
 
   // Product Management
-  async getProducts(): Promise<Product[]> {
-    return this.request<Product[]>('/products');
+  async getProducts(shopId: string): Promise<Product[]> {
+    const response = await this.request<ProductsResponse>(`/shops/${shopId}/products`);
+    return response.products || [];
   }
 
-  async getProduct(productId: string): Promise<Product> {
-    return this.request<Product>(`/products/${productId}`);
+  async getProduct(shopId: string, productId: string): Promise<Product> {
+    return this.request<Product>(`/shops/${shopId}/products/${productId}`);
   }
 
   async createProduct(productData: {
@@ -335,12 +360,12 @@ class ApiService {
   }
 
   // Merchant Profile
-  async getMerchantProfile(): Promise<Merchant> {
-    return this.request<Merchant>('/merchants/profile');
+  async getMerchantProfile(): Promise<User> {
+    return this.request<User>('/merchants/profile');
   }
 
-  async updateMerchantProfile(profileData: Partial<Merchant>): Promise<Merchant> {
-    return this.request<Merchant>('/merchants/profile', {
+  async updateMerchantProfile(profileData: Partial<User>): Promise<User> {
+    return this.request<User>('/merchants/profile', {
       method: 'PUT',
       body: JSON.stringify(profileData),
     });
